@@ -329,6 +329,7 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 		evm.StateDB.CreateAccount(addr)
 	}
 
+	// 这里负数也可以转账
 	evm.Context.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -359,14 +360,14 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 	//stats: 收集隐含交易
 	// Call修改的是被调用者的storage
 	log.Info("to check if called by contract", "invokedByContract", invokedByContract)
-	if invokedByContract {
-		if value.Sign() > 0 {
+	if invokedByContract { //如果是合约内调用
+		if value.Sign() > 0 { //转账金额>0才收集，这个好像和上面转账负数也可以有遗漏
 			log.Info("collect embed transfer tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", to.Address().Bech32(), "amount", value, "&value", &value)
 			common.CollectEmbedTransferTx(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
 		}
 		if contract.CodeAddr != nil {
 			//codeAddr就是to.Address,参考to和setCodeAddress
-			if p := PlatONPrecompiledContracts[*contract.CodeAddr]; p != nil {
+			if p := PlatONPrecompiledContracts[*contract.CodeAddr]; p != nil { //如果是合约内调用platon内置合约
 				log.Info("collect embed PlantON precompiled contract tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", contract.CodeAddr.Bech32())
 				common.CollectEmbedContractTx(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), input)
 			}

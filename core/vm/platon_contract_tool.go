@@ -26,6 +26,11 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/x/xcom"
 )
 
+/*
+*
+2023/04/25 lvxiaoyi 考虑修改此方法的返回参数， 把 fn, params也返回，这样，可以方便采集platon内置合约交易的方法和参数。当然，这个修改，需要一系列相关文件的修改，虽然简单，但是改动文件较多。
+或者可以直接在这里采集platon内置合约交易的方法和参数，并记入到localdb，或者直接发送事件等方式
+*/
 func execPlatonContract(input []byte, command map[uint16]interface{}) (ret []byte, err error) {
 	// verify the tx data by contracts method
 	_, fn, params, err := plugin.VerifyTxData(input, command)
