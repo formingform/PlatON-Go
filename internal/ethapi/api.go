@@ -21,13 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	ctypes "github.com/PlatONnetwork/PlatON-Go/consensus/cbft/types"
 	"math/big"
 	"time"
 
 	"github.com/PlatONnetwork/PlatON-Go/core/vm/vrfstatistics"
-
-	"github.com/PlatONnetwork/PlatON-Go/x/plugin"
 
 	"github.com/PlatONnetwork/PlatON-Go/x/gov"
 
@@ -1579,54 +1578,44 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 			fields["contractAddress"] = receipt.ContractAddress
 		}
 
-		//把opCreate/opCreate2操作码创建的合约地址从STAKING_DB里拿出来，并和receipt.ContractAddress合并后放入fields["contractCreated"]
-		transKey := plugin.InnerContractCreate + value.Hash().String()
-		data, err := plugin.STAKING_DB.HistoryDB.Get([]byte(transKey))
-		var contractCreateList []*types.ContractCreated
-		if nil != err {
-			log.Debug("queryContractCreate rlp get innerContractCreate error ", "err", err)
+		//把opCreate/opCreate2操作码创建的合约地址拿出来，并和receipt.ContractAddress合并后放入fields["contractCreated"]
+		// todo: 2023/05/04 lvxiaoyi to == nil时，是部署合约，难道不会在createdContractList中吗？
+		createdContractList := monitor.GetCreatedContract(blockNumber, value.Hash())
+		/*if nil != fields["contractAddress"] {
+			stateDB, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+			stateDB.GetCode(receipt.ContractAddress)
+
+		}*/
+
+		if nil == createdContractList {
+			fields["createdContract"] = []*monitor.CreatedContract{}
 		} else {
-			err = rlp.DecodeBytes(data, &contractCreateList)
-			if nil != err {
-				log.Error("queryContractCreate rlp decode innerContractCreate error ", "err", err)
-			}
+			fields["createdContract"] = createdContractList
 		}
 
-		if nil != fields["contractAddress"] {
-			contractCreate := new(types.ContractCreated)
-			contractCreate.Address = receipt.ContractAddress
-
-			var contractCreateListTemp []*types.ContractCreated
-			contractCreateListTemp = append(contractCreateListTemp, contractCreate)
-			contractCreateListTemp = append(contractCreateListTemp, contractCreateList...)
-			fields["contractCreated"] = contractCreateListTemp
+		//把opSuicide操作码销毁的合约地址拿出来，并放入fields["contractSuicided"]
+		suicidedContractList := monitor.GetSuicidedContract(blockNumber, value.Hash())
+		if nil == suicidedContractList {
+			fields["suicidedContract"] = []*monitor.SuicidedContract{}
 		} else {
-			if nil == contractCreateList {
-				fields["contractCreated"] = [][]*types.ContractCreated{} //是不是应该是：[]*types.ContractCreated{}
-			} else {
-				fields["contractCreated"] = contractCreateList
-			}
+			fields["suicidedContract"] = suicidedContractList
 		}
 
-		//把opSuicide操作码销毁的合约地址从STAKING_DB里拿出来，并放入fields["contractSuicided"]
-		contractSuicidedDbKey := plugin.ContractSuicided + value.Hash().String()
-		data, err = plugin.STAKING_DB.HistoryDB.Get([]byte(contractSuicidedDbKey))
-		if nil != err {
-			log.Debug("failed to find contractSuicided", "err", err)
+		//把本交易发现的代理关系拿出来，放入proxyContract
+		proxyContractList := monitor.GetProxyContract(blockNumber, value.Hash())
+		if nil == proxyContractList {
+			fields["proxyContract"] = []*monitor.ProxyContract{}
 		} else {
-			var contractSuicidedList []*types.ContractSuicided
-			err = rlp.DecodeBytes(data, &contractSuicidedList)
-			if nil != err {
-				log.Error("failed to rlp decode contractSuicided", "err", err)
-			} else {
-				if nil == contractSuicidedList {
-					fields["contractSuicided"] = [][]*types.ContractSuicided{} //是不是应该是：[]*types.ContractSuicided{}
-				} else {
-					fields["contractSuicided"] = contractSuicidedList
-				}
-			}
+			fields["proxyContract"] = proxyContractList
 		}
 
+		//把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
+		embedTransferList := monitor.GetEmbedTransfer(blockNumber, value.Hash())
+		if embedTransferList == nil {
+			fields["embedTransfer"] = []*monitor.EmbedTransfer{}
+		} else {
+			fields["embedTransfer"] = embedTransferList
+		}
 		queue[key] = fields
 	}
 	return queue, nil

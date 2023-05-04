@@ -19,6 +19,7 @@ package vm
 import (
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/params"
@@ -396,16 +397,21 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // opExtCodeHash returns the code hash of a specified account.
 // There are several cases when the function is called, while we can relay everything
 // to `state.GetCodeHash` function to ensure the correctness.
-//   (1) Caller tries to get the code hash of a normal contract account, state
+//
+//	(1) Caller tries to get the code hash of a normal contract account, state
+//
 // should return the relative code hash and set it as the result.
 //
-//   (2) Caller tries to get the code hash of a non-existent account, state should
+//	(2) Caller tries to get the code hash of a non-existent account, state should
+//
 // return common.Hash{} and zero will be set as the result.
 //
-//   (3) Caller tries to get the code hash for an account without contract code,
+//	(3) Caller tries to get the code hash for an account without contract code,
+//
 // state should return emptyCodeHash(0xc5d246...) as the result.
 //
-//   (4) Caller tries to get the code hash of a precompiled account, the result
+//	(4) Caller tries to get the code hash of a precompiled account, the result
+//
 // should be zero or emptyCodeHash.
 //
 // It is worth noting that in order to avoid unnecessary create and clean,
@@ -414,10 +420,12 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // If the precompile account is not transferred any amount on a private or
 // customized chain, the return value will be zero.
 //
-//   (5) Caller tries to get the code hash for an account which is marked as suicided
+//	(5) Caller tries to get the code hash for an account which is marked as suicided
+//
 // in the current transaction, the code hash of this account should be returned.
 //
-//   (6) Caller tries to get the code hash for an account which is marked as deleted,
+//	(6) Caller tries to get the code hash for an account which is marked as deleted,
+//
 // this account should be regarded as a non-existent account and zero should be returned.
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	slot := callContext.stack.peek()
@@ -633,7 +641,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
 
-	saveContractCreate(interpreter, input, addr, suberr)
+	//stats: 收集新建的合约
+	monitor.CollectCreatedContract(interpreter.evm.StateDB.TxHash(), addr, interpreter.evm.StateDB.GetCode(addr))
+	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
 		return res, nil
@@ -671,7 +681,9 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
 
-	saveContractCreate(interpreter, input, addr, suberr)
+	//stats: 收集新建的合约
+	monitor.CollectCreatedContract(interpreter.evm.StateDB.TxHash(), addr, interpreter.evm.StateDB.GetCode(addr))
+	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
 		return res, nil
@@ -700,7 +712,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.Call(InvokedByContract, callContext.contract, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
@@ -756,6 +768,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) (
 	return ret, nil
 }
 
+// 合约内DelegateCall的方式调用其它合约时，将会使用此操作码
 func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	stack := callContext.stack
 	// Pop gas. The actual gas is in interpreter.evm.callGasTemp.
@@ -784,6 +797,15 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	if IsPlatONPrecompiledContract(toAddr, false) {
 		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
 	}
+
+	// TODO:
+	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
+	monitor.CollectProxyContract(
+		interpreter.evm.StateDB.TxHash(),
+		callContext.contract.CallerAddress,
+		toAddr,
+		interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress),
+		interpreter.evm.StateDB.GetCode(toAddr))
 
 	return ret, nil
 }
@@ -840,8 +862,15 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance)
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
 
-	//把销毁的合约记录下来
-	saveContractSuicided(interpreter, callContext.contract.Address())
+	//stats: 把销毁的合约记录下来
+	monitor.CollectSuicidedContract(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
+	//saveContractSuicided(interpreter, callContext.contract.Address())
+
+	//stats: 收集隐含交易
+	if balance.Sign() > 0 {
+		log.Info("collect embed transfer in opSuicide()", "blockNumber", interpreter.evm.Context.BlockNumber.Uint64(), "txHash", interpreter.evm.StateDB.TxHash(), "caller", callContext.contract.Address().Bech32(), "to", common.Address(beneficiary.Bytes20()).Bech32(), "&value", &balance)
+		monitor.CollectEmbedTransfer(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.Address(), common.Address(beneficiary.Bytes20()), balance)
+	}
 
 	return nil, nil
 }
@@ -930,6 +959,7 @@ func makeSwap(size int64) executionFunc {
 	}
 }
 
+// 收集ppos交易数据
 func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code string) {
 	blockNum := interpreter.evm.Context.BlockNumber
 	txHash := interpreter.evm.StateDB.TxHash().String()
@@ -1010,7 +1040,7 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	log.Debug("saveTransData success")
 }
 
-func saveContractCreate(interpreter *EVMInterpreter, inputData []byte, addr common.Address, err error) {
+/*func saveContractCreate(interpreter *EVMInterpreter, input []byte, addr common.Address, err error) {
 
 	if nil != err {
 		return
@@ -1021,7 +1051,7 @@ func saveContractCreate(interpreter *EVMInterpreter, inputData []byte, addr comm
 	transKey := plugin.InnerContractCreate + txHash
 	data, err := plugin.STAKING_DB.HistoryDB.Get([]byte(transKey))
 
-	var contractCreateList []*types.ContractCreated
+	var contractCreateList []*monitor.ContractCreated
 	if nil != err {
 		log.Error("saveContractCreate rlp get innerContractCreate error ", "err", err)
 	} else {
@@ -1032,7 +1062,12 @@ func saveContractCreate(interpreter *EVMInterpreter, inputData []byte, addr comm
 		}
 	}
 
-	contractCreate := new(types.ContractCreated)
+	//TODO:
+	//重新定义ContractCreated，加入type属性。这个需要scan-agent同步修改
+	//newContractBin := contractBin{code: input}
+	//contractType := newContractBin.getContractType()
+
+	contractCreate := new(monitor.ContractCreated)
 	contractCreate.Address = addr
 	contractCreateList = append(contractCreateList, contractCreate)
 
@@ -1044,9 +1079,9 @@ func saveContractCreate(interpreter *EVMInterpreter, inputData []byte, addr comm
 
 	plugin.STAKING_DB.HistoryDB.Put([]byte(transKey), transHashByte)
 	log.Debug("saveContractCreate success")
-}
+}*/
 
-func saveContractSuicided(interpreter *EVMInterpreter, addr common.Address) {
+/*func saveContractSuicided(interpreter *EVMInterpreter, addr common.Address) {
 	txHash := interpreter.evm.StateDB.TxHash().String()
 
 	transKey := plugin.ContractSuicided + txHash
@@ -1055,13 +1090,13 @@ func saveContractSuicided(interpreter *EVMInterpreter, addr common.Address) {
 		log.Error("failed to find ContractSuicided", "err", err)
 		return
 	}
-	var contractSuicidedList []*types.ContractSuicided
+	var contractSuicidedList []*monitor.ContractSuicided
 	err = rlp.DecodeBytes(data, &contractSuicidedList)
 	if nil != err {
 		log.Error("failed to rlp decode ContractSuicided", "err", err)
 		return
 	}
-	contractSuicided := new(types.ContractSuicided)
+	contractSuicided := new(monitor.ContractSuicided)
 	contractSuicided.Address = addr
 	contractSuicidedList = append(contractSuicidedList, contractSuicided)
 
@@ -1074,3 +1109,4 @@ func saveContractSuicided(interpreter *EVMInterpreter, addr common.Address) {
 	plugin.STAKING_DB.HistoryDB.Put([]byte(transKey), transHashByte)
 	log.Debug("save ContractSuicided success")
 }
+*/

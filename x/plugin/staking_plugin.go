@@ -91,16 +91,14 @@ const (
 	EpochValIndexSize = 2
 	RoundValIndexSize = 6
 
-	ValidatorName       = "Validator"
-	VerifierName        = "Verifier"
-	RewardName          = "Reward"
-	YearName            = "Year"
-	InitNodeName        = "InitNode"
-	SlashName           = "Slash"
-	TransBlockName      = "TransBlock"
-	TransHashName       = "TransHash"
-	InnerContractCreate = "ContractCreate"
-	ContractSuicided    = "ContractSuicided"
+	ValidatorName  = "Validator"
+	VerifierName   = "Verifier"
+	RewardName     = "Reward"
+	YearName       = "Year"
+	InitNodeName   = "InitNode"
+	SlashName      = "Slash"
+	TransBlockName = "TransBlock"
+	TransHashName  = "TransHash"
 )
 
 // Instance a global StakingPlugin
