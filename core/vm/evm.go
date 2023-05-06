@@ -18,8 +18,8 @@ package vm
 
 import (
 	"context"
-	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math/big"
 	"sync/atomic"
 	"time"

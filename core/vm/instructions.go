@@ -19,9 +19,9 @@ package vm
 import (
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/params"
 	"github.com/PlatONnetwork/PlatON-Go/rlp"
 	"github.com/PlatONnetwork/PlatON-Go/x/plugin"
@@ -642,7 +642,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	callContext.contract.Gas += returnGas
 
 	//stats: 收集新建的合约
-	monitor.CollectCreatedContract(interpreter.evm.StateDB.TxHash(), addr, interpreter.evm.StateDB.GetCode(addr))
+	monitor.CollectCreatedContract(interpreter.evm.StateDB, addr)
 	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
@@ -682,7 +682,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	callContext.contract.Gas += returnGas
 
 	//stats: 收集新建的合约
-	monitor.CollectCreatedContract(interpreter.evm.StateDB.TxHash(), addr, interpreter.evm.StateDB.GetCode(addr))
+	monitor.CollectCreatedContract(interpreter.evm.StateDB, addr)
 	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
@@ -800,8 +800,8 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 
 	// TODO:
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
-	monitor.CollectProxyContract(
-		interpreter.evm.StateDB.TxHash(),
+
+	monitor.InspectProxyPattern(interpreter.evm.StateDB,
 		callContext.contract.CallerAddress,
 		toAddr,
 		interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress),
@@ -863,7 +863,7 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
 
 	//stats: 把销毁的合约记录下来
-	monitor.CollectSuicidedContract(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
+	monitor.CollectSuicidedContract(interpreter.evm.StateDB, callContext.contract.Address())
 	//saveContractSuicided(interpreter, callContext.contract.Address())
 
 	//stats: 收集隐含交易

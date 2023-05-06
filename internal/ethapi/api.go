@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	ctypes "github.com/PlatONnetwork/PlatON-Go/consensus/cbft/types"
+	monitor2 "github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math/big"
 	"time"
 
@@ -1580,7 +1581,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 
 		//把opCreate/opCreate2操作码创建的合约地址拿出来，并和receipt.ContractAddress合并后放入fields["contractCreated"]
 		// todo: 2023/05/04 lvxiaoyi to == nil时，是部署合约，难道不会在createdContractList中吗？
-		createdContractList := monitor.GetCreatedContract(blockNumber, value.Hash())
+		createdContractList := monitor2.GetCreatedContract(blockNumber, value.Hash())
 		/*if nil != fields["contractAddress"] {
 			stateDB, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 			stateDB.GetCode(receipt.ContractAddress)
@@ -1594,7 +1595,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		//把opSuicide操作码销毁的合约地址拿出来，并放入fields["contractSuicided"]
-		suicidedContractList := monitor.GetSuicidedContract(blockNumber, value.Hash())
+		suicidedContractList := monitor2.GetSuicidedContract(blockNumber, value.Hash())
 		if nil == suicidedContractList {
 			fields["suicidedContract"] = []*monitor.SuicidedContract{}
 		} else {
@@ -1610,9 +1611,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		//把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
-		embedTransferList := monitor.GetEmbedTransfer(blockNumber, value.Hash())
+		embedTransferList := monitor2.GetEmbedTransfer(blockNumber, value.Hash())
 		if embedTransferList == nil {
-			fields["embedTransfer"] = []*monitor.EmbedTransfer{}
+			fields["embedTransfer"] = []*monitor2.EmbedTransfer{}
 		} else {
 			fields["embedTransfer"] = embedTransferList
 		}
