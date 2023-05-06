@@ -21,9 +21,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/common/monitor"
 	ctypes "github.com/PlatONnetwork/PlatON-Go/consensus/cbft/types"
-	monitor2 "github.com/PlatONnetwork/PlatON-Go/monitor"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math/big"
 	"time"
 
@@ -1581,7 +1580,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 
 		//把opCreate/opCreate2操作码创建的合约地址拿出来，并和receipt.ContractAddress合并后放入fields["contractCreated"]
 		// todo: 2023/05/04 lvxiaoyi to == nil时，是部署合约，难道不会在createdContractList中吗？
-		createdContractList := monitor2.GetCreatedContract(blockNumber, value.Hash())
+		createdContractList := monitor.GetCreatedContractInfo(blockNumber, value.Hash())
 		/*if nil != fields["contractAddress"] {
 			stateDB, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 			stateDB.GetCode(receipt.ContractAddress)
@@ -1589,31 +1588,31 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}*/
 
 		if nil == createdContractList {
-			fields["createdContract"] = []*monitor.CreatedContract{}
+			fields["createdContract"] = []*monitor.ContractInfo{}
 		} else {
 			fields["createdContract"] = createdContractList
 		}
 
 		//把opSuicide操作码销毁的合约地址拿出来，并放入fields["contractSuicided"]
-		suicidedContractList := monitor2.GetSuicidedContract(blockNumber, value.Hash())
+		suicidedContractList := monitor.GetSuicidedContract(blockNumber, value.Hash())
 		if nil == suicidedContractList {
-			fields["suicidedContract"] = []*monitor.SuicidedContract{}
+			fields["suicidedContract"] = []*monitor.ContractInfo{}
 		} else {
 			fields["suicidedContract"] = suicidedContractList
 		}
 
 		//把本交易发现的代理关系拿出来，放入proxyContract
-		proxyContractList := monitor.GetProxyContract(blockNumber, value.Hash())
+		proxyContractList := monitor.GetProxyPattern(blockNumber, value.Hash())
 		if nil == proxyContractList {
-			fields["proxyContract"] = []*monitor.ProxyContract{}
+			fields["proxyContract"] = []*monitor.ContractInfo{}
 		} else {
 			fields["proxyContract"] = proxyContractList
 		}
 
 		//把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
-		embedTransferList := monitor2.GetEmbedTransfer(blockNumber, value.Hash())
+		embedTransferList := monitor.GetEmbedTransfer(blockNumber, value.Hash())
 		if embedTransferList == nil {
-			fields["embedTransfer"] = []*monitor2.EmbedTransfer{}
+			fields["embedTransfer"] = []*monitor.EmbedTransfer{}
 		} else {
 			fields["embedTransfer"] = embedTransferList
 		}

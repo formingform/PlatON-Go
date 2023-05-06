@@ -31,6 +31,12 @@ func (t ContractType) String() string {
 
 var (
 	// 返回方法签名的hash, 这个hash将出现在合约的bin中，为了方便比较，返回hash的string(不含0x前缀)
+	evmFuncHashByte = func(funcName string) []byte {
+		prefix := sha3.NewLegacyKeccak256()
+		prefix.Write([]byte(funcName))
+		return prefix.Sum(nil)[:4]
+	}
+
 	evmFuncHash = func(funcName string) string {
 		prefix := sha3.NewLegacyKeccak256()
 		prefix.Write([]byte(funcName))
@@ -61,15 +67,19 @@ var (
 	adminSlotOfZeppelinos = keccak256_zeppelin("org.zeppelinos.proxy.admin")
 )
 
-type contract struct {
-	Address common.Address `json:"proxyAddress"`
-	Code    []byte         `json:"-"`
-	Bin     string         `json:"bin"`
-	Type    ContractType   `json:"contractType"`
+type ContractInfo struct {
+	Address          common.Address `json:"proxyAddress"`
+	Code             []byte         `json:"-"`
+	Bin              string         `json:"bin"`
+	Type             ContractType   `json:"contractType"`
+	TokenName        string         `json:"tokenName"`
+	TokenSymbol      string         `json:"tokenSymbol"`
+	TokenDecimals    uint           `json:"tokenDecimals"`
+	TokenTotalSupply *big.Int       `json:"tokenTotalSupply"`
 }
 
-func NewContract(address common.Address, code []byte) *contract {
-	instance := new(contract)
+func NewContractInfo(address common.Address, code []byte) *ContractInfo {
+	instance := new(ContractInfo)
 	instance.Address = address
 	instance.Code = code
 	instance.Type = GENERAL
@@ -80,18 +90,10 @@ func NewContract(address common.Address, code []byte) *contract {
 	return instance
 }
 
-func (c *contract) getType() ContractType {
-	return c.Type
-}
-
-func (c *contract) getBin() string {
-	return c.Bin
-}
-
-func (c *contract) matchProxyPattern() bool {
-	return c.getType() == GENERAL &&
-		((strings.Index(c.getBin(), adminSlotOfEip1967) != -1 && strings.Index(c.getBin(), implSlotOfEip1967) != -1) ||
-			(strings.Index(c.getBin(), adminSlotOfZeppelinos) != -1 && strings.Index(c.getBin(), implSlotZeppelinos) != -1))
+func (c *ContractInfo) matchProxyPattern() bool {
+	return c.Type == GENERAL &&
+		((strings.Index(c.Bin, adminSlotOfEip1967) != -1 && strings.Index(c.Bin, implSlotOfEip1967) != -1) ||
+			(strings.Index(c.Bin, adminSlotOfZeppelinos) != -1 && strings.Index(c.Bin, implSlotZeppelinos) != -1))
 }
 
 func getType(binHex string) ContractType {

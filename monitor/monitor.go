@@ -29,8 +29,8 @@ type EmbedTransfer struct {
 }
 
 type ProxyPattern struct {
-	Proxy          *contract `json:"proxy"`
-	Implementation *contract `json:"implementation"`
+	Proxy          *ContractInfo `json:"proxy"`
+	Implementation *ContractInfo `json:"implementation"`
 }
 
 func toJson(data interface{}) ([]byte, error) {
@@ -104,26 +104,29 @@ func GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
 	return embedTransferList
 }
 
-func CollectCreatedContract(stateDB StateDB, newContractAddr common.Address) {
-	dbKey := CreatedContractKey.String() + "_" + stateDB.TxHash().String()
+type ContractRef interface {
+	Address() common.Address
+}
+
+func CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
+	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load created contracts", "err", err)
 		return
 	}
-	var createdContractList []*contract
+	var createdContractInfoList []*ContractInfo
 	if data != nil {
-		err = parseJson(data, &createdContractList)
+		err = parseJson(data, &createdContractInfoList)
 		if nil != err {
 			log.Error("failed to decode json to created contracts", "err", err)
 			return
 		}
 	}
 
-	contract := NewContract(newContractAddr, stateDB.GetCode(newContractAddr))
-	createdContractList = append(createdContractList, contract)
+	createdContractInfoList = append(createdContractInfoList, contractInfo)
 
-	jsonStr, err := toJson(createdContractList)
+	jsonStr, err := toJson(createdContractInfoList)
 	if nil != err {
 		log.Error("failed to encode created contracts to json", "err", err)
 		return
@@ -132,7 +135,7 @@ func CollectCreatedContract(stateDB StateDB, newContractAddr common.Address) {
 	log.Debug("save created contracts success")
 }
 
-func GetCreatedContract(blockNumber uint64, txHash common.Hash) []*contract {
+func GetCreatedContractInfo(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
@@ -141,9 +144,9 @@ func GetCreatedContract(blockNumber uint64, txHash common.Hash) []*contract {
 		log.Error("failed to load created contracts", "err", err)
 		return nil
 	}
-	var createdContractList []*contract
+	var createdContractInfoList []*ContractInfo
 	if data != nil {
-		err = parseJson(data, &createdContractList)
+		err = parseJson(data, &createdContractInfoList)
 		if nil != err {
 			log.Error("failed to decode json to created contracts", "err", err)
 			return nil
@@ -151,32 +154,32 @@ func GetCreatedContract(blockNumber uint64, txHash common.Hash) []*contract {
 	}
 
 	log.Debug("get created contracts success")
-	return createdContractList
+	return createdContractInfoList
 }
 
-func CollectSuicidedContract(stateDB StateDB, suicidedContractAddr common.Address) {
-	dbKey := SuicidedContractKey.String() + "_" + stateDB.TxHash().String()
+func CollectSuicidedContract(txHash common.Hash, suicidedContractAddr common.Address) {
+	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load suicided contracts", "err", err)
 		return
 	}
 
-	var suicidedContractList []*contract
+	var suicidedContractInfoList []*ContractInfo
 	if data != nil {
-		err = parseJson(data, &suicidedContractList)
+		err = parseJson(data, &suicidedContractInfoList)
 		if nil != err {
 			log.Error("failed to decode json to suicided contracts", "err", err)
 			return
 		}
 	}
 
-	suicidedContract := new(contract)
+	suicidedContract := new(ContractInfo)
 	suicidedContract.Address = suicidedContractAddr
 
-	suicidedContractList = append(suicidedContractList, suicidedContract)
+	suicidedContractInfoList = append(suicidedContractInfoList, suicidedContract)
 
-	jsonStr, err := toJson(suicidedContractList)
+	jsonStr, err := toJson(suicidedContractInfoList)
 	if nil != err {
 		log.Error("failed to encode suicided contracts to json", "err", err)
 		return
@@ -185,7 +188,7 @@ func CollectSuicidedContract(stateDB StateDB, suicidedContractAddr common.Addres
 	log.Debug("save suicided contracts success")
 }
 
-func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*contract {
+func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
@@ -194,9 +197,9 @@ func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*contract {
 		log.Error("failed to load suicided contracts", "err", err)
 		return nil
 	}
-	var suicidedContractList []*contract
+	var suicidedContractInfoList []*ContractInfo
 	if data != nil {
-		err = parseJson(data, &suicidedContractList)
+		err = parseJson(data, &suicidedContractInfoList)
 		if nil != err {
 			log.Error("failed to decode json to suicided contracts", "err", err)
 			return nil
@@ -204,27 +207,12 @@ func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*contract {
 	}
 
 	log.Debug("get suicided contracts success")
-	return suicidedContractList
+	return suicidedContractInfoList
 }
 
-// InspectProxyPattern 根据交易txHash发现代理关系
-func InspectProxyPattern(stateDB StateDB, callerAddr, targetAddr common.Address, callerCode, targetCode []byte) {
-	caller := NewContract(callerAddr, callerCode)
-	target := NewContract(targetAddr, targetCode)
-
-	if !caller.matchProxyPattern() || target.getType() == GENERAL {
-		log.Debug("found a delegate call, but not match the proxy pattern", "caller", callerAddr, "target", targetAddr)
-		return
-	}
-
-	storage := stateDB.GetState(callerAddr, []byte(implSlotZeppelinos))
-	implAddr := common.BytesToAddress(storage)
-	if implAddr != targetAddr {
-		log.Debug("found a delegate call, but not match the proxy pattern", "caller", callerAddr, "target", targetAddr)
-		return
-	}
-
-	dbKey := ProxyPatternKey.String() + "_" + stateDB.TxHash().String()
+// CollectProxyPattern 根据交易txHash发现代理关系
+func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
+	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
 	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
@@ -240,7 +228,7 @@ func InspectProxyPattern(stateDB StateDB, callerAddr, targetAddr common.Address,
 		}
 	}
 
-	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: caller, Implementation: target})
+	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
 	jsonStr, err := toJson(proxyPatternList)
 	if nil != err {

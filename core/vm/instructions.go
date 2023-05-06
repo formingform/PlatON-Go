@@ -642,7 +642,10 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	callContext.contract.Gas += returnGas
 
 	//stats: 收集新建的合约
-	monitor.CollectCreatedContract(interpreter.evm.StateDB, addr)
+	contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
+	monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
+
+	//monitor.CollectCreatedContract(interpreter.evm, callContext.contract.caller, addr)
 	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
@@ -682,7 +685,8 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	callContext.contract.Gas += returnGas
 
 	//stats: 收集新建的合约
-	monitor.CollectCreatedContract(interpreter.evm.StateDB, addr)
+	contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
+	monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
 	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
@@ -800,12 +804,14 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 
 	// TODO:
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
+	callerInfo := monitor.NewContractInfo(callContext.contract.CallerAddress, interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress))
+	targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
 
-	monitor.InspectProxyPattern(interpreter.evm.StateDB,
-		callContext.contract.CallerAddress,
-		toAddr,
-		interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress),
-		interpreter.evm.StateDB.GetCode(toAddr))
+	isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, callerInfo, targetInfo)
+	//---
+	if isProxyPattern == true {
+		monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), callerInfo, targetInfo)
+	}
 
 	return ret, nil
 }
@@ -863,7 +869,7 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
 
 	//stats: 把销毁的合约记录下来
-	monitor.CollectSuicidedContract(interpreter.evm.StateDB, callContext.contract.Address())
+	monitor.CollectSuicidedContract(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
 	//saveContractSuicided(interpreter, callContext.contract.Address())
 
 	//stats: 收集隐含交易
@@ -1110,3 +1116,28 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	log.Debug("save ContractSuicided success")
 }
 */
+
+func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Address) *monitor.ContractInfo {
+	contractInfo := monitor.NewContractInfo(newContractAddr, evm.StateDB.GetCode(newContractAddr))
+	if contractInfo.Type == monitor.ERC20 {
+		ret, err := evm.StaticCallNoCost(caller, caller.Address(), []byte{0x01})
+		if err != nil {
+			contractInfo.TokenName = string(ret)
+		}
+	}
+	return contractInfo
+}
+
+func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *monitor.ContractInfo) bool {
+	if callerInfo.Type == monitor.GENERAL {
+		if targetInfo.Type == monitor.ERC20 {
+			ret1, err1 := evm.StaticCallNoCost(caller, targetInfo.Address, []byte{0x01})
+			ret2, err2 := evm.StaticCallNoCost(caller, callerInfo.Address, []byte{0x01})
+			if err1 == nil && err2 == nil && len(ret1) == 0 && len(ret1) > 0 {
+				targetInfo.TokenName = string(ret2)
+				return true
+			}
+		}
+	}
+	return false
+}
