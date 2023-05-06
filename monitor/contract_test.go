@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
@@ -24,8 +25,8 @@ func Test_implementation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	contract := NewContract(common.Address{0x01}, code)
-	fmt.Println("contract type is: ", contract.getType().String())
+	contract := NewContractInfo(common.Address{0x01}, code)
+	fmt.Println("contract type is: ", contract.Type.String())
 	fmt.Println("contract type is proxy?", contract.matchProxyPattern())
 
 }
@@ -37,7 +38,25 @@ func Test_proxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	contract := NewContract(common.Address{0x01}, code)
-	fmt.Println("contract type is: ", contract.getType().String())
+	contract := NewContractInfo(common.Address{0x01}, code)
+	fmt.Println("contract type is: ", contract.Type.String())
 	fmt.Println("contract type is proxy?", contract.matchProxyPattern())
+}
+
+func Test_buildABI(t *testing.T) {
+	nameMethod := evmFuncHashByte("name()")
+	symbolMethod := evmFuncHashByte("symbol()")
+	decimalsMethod := evmFuncHashByte("decimals()")
+	totalSupplyMethod := evmFuncHashByte("totalSupply()")
+	fmt.Println("nameMethod", hex.EncodeToString(nameMethod))
+	fmt.Println("symbolMethod", hex.EncodeToString(symbolMethod))
+	fmt.Println("decimalsMethod", hex.EncodeToString(decimalsMethod))
+	fmt.Println("totalSupplyMethod", hex.EncodeToString(totalSupplyMethod))
+
+	methodHash := evmFuncHashByte("setA(uint256)")
+	var buf = make([]byte, 8)
+	argHash := common.LeftPadBytes(buf, 32)
+	input := append(methodHash, argHash...)
+
+	fmt.Println("input", hex.EncodeToString(input))
 }

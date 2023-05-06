@@ -42,8 +42,8 @@ func TestMarshalProxyPattern(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	caller := NewContract(common.Address{0x01}, proxyCode)
-	target := NewContract(common.Address{0x012}, implCode)
+	caller := NewContractInfo(common.Address{0x01}, proxyCode)
+	target := NewContractInfo(common.Address{0x012}, implCode)
 	var proxyPatternList []*ProxyPattern
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: caller, Implementation: target})
 	jsonStr, err := toJson(proxyPatternList)
