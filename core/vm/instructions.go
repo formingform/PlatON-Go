@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
@@ -28,6 +29,7 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/x/staking"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
+	"math/big"
 	"strconv"
 )
 
@@ -641,9 +643,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
 
-	//stats: 收集新建的合约
-	contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
-	monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
+	//stats: 收集新建的合约。 core/vm/evm.go#create():552 中统一收集
+	//contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
+	//monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
 
 	//monitor.CollectCreatedContract(interpreter.evm, callContext.contract.caller, addr)
 	//saveContractCreate(interpreter, input, addr, suberr)
@@ -684,9 +686,9 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	callContext.stack.push(&stackvalue)
 	callContext.contract.Gas += returnGas
 
-	//stats: 收集新建的合约
-	contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
-	monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
+	//stats: 收集新建的合约。 core/vm/evm.go#create():552 中统一收集
+	//contractInfo := getContractInfo(interpreter.evm, callContext.contract.caller, addr)
+	//monitor.CollectCreatedContractInfo(interpreter.evm.StateDB.TxHash(), contractInfo)
 	//saveContractCreate(interpreter, input, addr, suberr)
 
 	if suberr == ErrExecutionReverted {
@@ -806,11 +808,15 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
 	callerInfo := monitor.NewContractInfo(callContext.contract.CallerAddress, interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress))
 	targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
+	log.Debug("delegate call details", "caller", string(common.ToJson(callerInfo)), "target", string(common.ToJson(targetInfo)))
 
 	isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, callerInfo, targetInfo)
 	//---
 	if isProxyPattern == true {
+		log.Debug("proxy pattern found")
 		monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), callerInfo, targetInfo)
+	} else {
+		log.Debug("proxy pattern not found")
 	}
 
 	return ret, nil
@@ -869,7 +875,8 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
 
 	//stats: 把销毁的合约记录下来
-	monitor.CollectSuicidedContract(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
+	log.Debug("processing contract suicide", "address", callContext.contract.Address())
+	monitor.CollectSuicidedContractInfo(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
 	//saveContractSuicided(interpreter, callContext.contract.Address())
 
 	//stats: 收集隐含交易
@@ -1116,25 +1123,53 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	log.Debug("save ContractSuicided success")
 }
 */
-
+/*
 func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Address) *monitor.ContractInfo {
 	contractInfo := monitor.NewContractInfo(newContractAddr, evm.StateDB.GetCode(newContractAddr))
-	if contractInfo.Type == monitor.ERC20 {
-		ret, err := evm.StaticCallNoCost(caller, caller.Address(), []byte{0x01})
-		if err != nil {
-			contractInfo.TokenName = string(ret)
-		}
-	}
 	return contractInfo
-}
+}*/
 
 func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *monitor.ContractInfo) bool {
 	if callerInfo.Type == monitor.GENERAL {
-		if targetInfo.Type == monitor.ERC20 {
-			ret1, err1 := evm.StaticCallNoCost(caller, targetInfo.Address, []byte{0x01})
-			ret2, err2 := evm.StaticCallNoCost(caller, callerInfo.Address, []byte{0x01})
-			if err1 == nil && err2 == nil && len(ret1) == 0 && len(ret1) > 0 {
-				targetInfo.TokenName = string(ret2)
+		if targetInfo.Type != monitor.GENERAL {
+			// get name/symbol/decimals /totalSupper
+			callerName, nameErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForName)
+			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
+
+			callerSymbol, symbolErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForSymbol)
+			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
+
+			callDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForDecimals)
+			var callDecimals uint16 = 0
+			if decimalsErr1 != nil {
+				callDecimals = binary.BigEndian.Uint16(callDecimalsBytes)
+			}
+			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
+			var targetDecimals uint16 = 0
+			if decimalsErr2 != nil {
+				targetDecimals = binary.BigEndian.Uint16(targetDecimalsBytes)
+			}
+
+			callTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForTotalSupply)
+			var callTotalSupply *big.Int = big0
+			if decimalsErr1 != nil {
+				callTotalSupply = new(big.Int).SetBytes(callTotalSupplyBytes)
+			}
+			targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
+			var targetTotalSupply *big.Int = big0
+			if totalSupplyErr2 != nil {
+				targetTotalSupply = new(big.Int).SetBytes(targetTotalSupplyBytes)
+			}
+
+			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil &&
+				len(callerName) > 0 && len(targetName) == 0 &&
+				len(callerSymbol) > 0 && len(targetSymbol) == 0 &&
+				callDecimals > 0 && targetDecimals == 0 &&
+				callTotalSupply.Cmp(big0) > 0 && targetTotalSupply.Cmp(big0) == 0 {
+				targetInfo.TokenName = string(callerName)
+				targetInfo.TokenSymbol = string(callerSymbol)
+				targetInfo.TokenDecimals = callDecimals
+				targetInfo.TokenTotalSupply = callTotalSupply
 				return true
 			}
 		}

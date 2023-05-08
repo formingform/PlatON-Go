@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/json"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
 )
@@ -22,31 +21,15 @@ func (dbKey MonitorDbKey) String() string {
 }
 
 type EmbedTransfer struct {
-	TxHash common.Hash    `json:"txHash"`
-	From   common.Address `json:"from"`
-	To     common.Address `json:"to"`
-	Amount *big.Int       `json:"amount"`
+	TxHash common.Hash    `json:"txHash,-"`
+	From   common.Address `json:"from,omitempty"`
+	To     common.Address `json:"to,omitempty"`
+	Amount *big.Int       `json:"amount,omitempty"`
 }
 
 type ProxyPattern struct {
-	Proxy          *ContractInfo `json:"proxy"`
-	Implementation *ContractInfo `json:"implementation"`
-}
-
-func toJson(data interface{}) ([]byte, error) {
-	if jsonStr, err := json.Marshal(data); err != nil {
-		return nil, err
-	} else {
-		return jsonStr, nil
-	}
-}
-
-func parseJson(data []byte, v interface{}) error {
-	if err := json.Unmarshal(data, v); err != nil {
-		return err
-	} else {
-		return nil
-	}
+	Proxy          *ContractInfo `json:"proxy,omitempty"`
+	Implementation *ContractInfo `json:"implementation,omitempty"`
 }
 
 func CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
@@ -60,13 +43,8 @@ func CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to commo
 	}
 
 	var embedTransferList []*EmbedTransfer
-	if data != nil {
-		err = parseJson(data, &embedTransferList)
-		if nil != err {
-			log.Error("failed to decode json to embed transfers", "err", err)
-			return
-		}
-	}
+	common.ParseJson(data, &embedTransferList)
+
 	embedTransfer := new(EmbedTransfer)
 	embedTransfer.TxHash = txHash
 	embedTransfer.From = from
@@ -75,14 +53,12 @@ func CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to commo
 
 	embedTransferList = append(embedTransferList, embedTransfer)
 
-	jsonStr, err := toJson(embedTransferList)
-	if nil != err {
-		log.Error("failed to encode embed transfers to json", "err", err)
-		return
+	json := common.ToJson(embedTransferList)
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		log.Debug("save embed transfers success")
 	}
 
-	getMonitorDB().PutLevelDB([]byte(dbKey), jsonStr)
-	log.Debug("save embed transfers success")
 }
 
 func GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
@@ -96,11 +72,7 @@ func GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
 	}
 
 	var embedTransferList []*EmbedTransfer
-	err = parseJson(data, &embedTransferList)
-	if nil != err {
-		log.Error("failed to decode json to embed transfers", "err", err)
-		return nil
-	}
+	common.ParseJson(data, &embedTransferList)
 	return embedTransferList
 }
 
@@ -116,26 +88,19 @@ func CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) 
 		return
 	}
 	var createdContractInfoList []*ContractInfo
-	if data != nil {
-		err = parseJson(data, &createdContractInfoList)
-		if nil != err {
-			log.Error("failed to decode json to created contracts", "err", err)
-			return
-		}
-	}
+	common.ParseJson(data, &createdContractInfoList)
 
 	createdContractInfoList = append(createdContractInfoList, contractInfo)
 
-	jsonStr, err := toJson(createdContractInfoList)
-	if nil != err {
-		log.Error("failed to encode created contracts to json", "err", err)
-		return
+	json := common.ToJson(createdContractInfoList)
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		log.Debug("save created contracts success")
 	}
-	getMonitorDB().PutLevelDB([]byte(dbKey), jsonStr)
-	log.Debug("save created contracts success")
+
 }
 
-func GetCreatedContractInfo(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
@@ -145,19 +110,13 @@ func GetCreatedContractInfo(blockNumber uint64, txHash common.Hash) []*ContractI
 		return nil
 	}
 	var createdContractInfoList []*ContractInfo
-	if data != nil {
-		err = parseJson(data, &createdContractInfoList)
-		if nil != err {
-			log.Error("failed to decode json to created contracts", "err", err)
-			return nil
-		}
-	}
+	common.ParseJson(data, &createdContractInfoList)
 
 	log.Debug("get created contracts success")
 	return createdContractInfoList
 }
 
-func CollectSuicidedContract(txHash common.Hash, suicidedContractAddr common.Address) {
+func CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -166,29 +125,22 @@ func CollectSuicidedContract(txHash common.Hash, suicidedContractAddr common.Add
 	}
 
 	var suicidedContractInfoList []*ContractInfo
-	if data != nil {
-		err = parseJson(data, &suicidedContractInfoList)
-		if nil != err {
-			log.Error("failed to decode json to suicided contracts", "err", err)
-			return
-		}
-	}
+	common.ParseJson(data, &suicidedContractInfoList)
 
 	suicidedContract := new(ContractInfo)
 	suicidedContract.Address = suicidedContractAddr
 
 	suicidedContractInfoList = append(suicidedContractInfoList, suicidedContract)
 
-	jsonStr, err := toJson(suicidedContractInfoList)
-	if nil != err {
-		log.Error("failed to encode suicided contracts to json", "err", err)
-		return
+	json := common.ToJson(suicidedContractInfoList)
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		log.Debug("save suicided contracts success")
 	}
-	getMonitorDB().PutLevelDB([]byte(dbKey), jsonStr)
-	log.Debug("save suicided contracts success")
+
 }
 
-func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
@@ -198,13 +150,7 @@ func GetSuicidedContract(blockNumber uint64, txHash common.Hash) []*ContractInfo
 		return nil
 	}
 	var suicidedContractInfoList []*ContractInfo
-	if data != nil {
-		err = parseJson(data, &suicidedContractInfoList)
-		if nil != err {
-			log.Error("failed to decode json to suicided contracts", "err", err)
-			return nil
-		}
-	}
+	common.ParseJson(data, &suicidedContractInfoList)
 
 	log.Debug("get suicided contracts success")
 	return suicidedContractInfoList
@@ -220,26 +166,19 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 	}
 
 	var proxyPatternList []*ProxyPattern
-	if data != nil {
-		err = parseJson(data, &proxyPatternList)
-		if nil != err {
-			log.Error("failed to decode json to proxy patterns", "err", err)
-			return
-		}
-	}
+	common.ParseJson(data, &proxyPatternList)
 
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
-	jsonStr, err := toJson(proxyPatternList)
-	if nil != err {
-		log.Error("failed to encode proxy patterns to json", "err", err)
-		return
+	json := common.ToJson(proxyPatternList)
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		log.Debug("save proxy patterns success")
 	}
-	getMonitorDB().PutLevelDB([]byte(dbKey), jsonStr)
-	log.Debug("save proxy patterns success")
+
 }
 
-func GetProxyPattern(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
+func GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
 	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
@@ -249,13 +188,7 @@ func GetProxyPattern(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
 		return nil
 	}
 	var proxyPatternList []*ProxyPattern
-	if data != nil {
-		err = parseJson(data, &proxyPatternList)
-		if nil != err {
-			log.Error("failed to decode json to proxy patterns", "err", err)
-			return nil
-		}
-	}
+	common.ParseJson(data, &proxyPatternList)
 
 	log.Debug("get proxy patterns success")
 	return proxyPatternList

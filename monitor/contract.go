@@ -68,14 +68,14 @@ var (
 )
 
 type ContractInfo struct {
-	Address          common.Address `json:"proxyAddress"`
+	Address          common.Address `json:"address"`
 	Code             []byte         `json:"-"`
-	Bin              string         `json:"bin"`
-	Type             ContractType   `json:"contractType"`
-	TokenName        string         `json:"tokenName"`
-	TokenSymbol      string         `json:"tokenSymbol"`
-	TokenDecimals    uint           `json:"tokenDecimals"`
-	TokenTotalSupply *big.Int       `json:"tokenTotalSupply"`
+	Bin              string         `json:"bin,omitempty"`
+	Type             ContractType   `json:"contractType,omitempty"`
+	TokenName        string         `json:"tokenName,omitempty"`
+	TokenSymbol      string         `json:"tokenSymbol,omitempty"`
+	TokenDecimals    uint16         `json:"tokenDecimals,omitempty"`
+	TokenTotalSupply *big.Int       `json:"tokenTotalSupply,omitempty"`
 }
 
 func NewContractInfo(address common.Address, code []byte) *ContractInfo {
@@ -117,6 +117,13 @@ func isERC20(binHex string) bool {
 		"approve(address,uint256)",
 		"allowance(address,address)")
 }
+
+var (
+	InputForName        = evmFuncHashByte("name()")
+	InputForSymbol      = evmFuncHashByte("symbol()")
+	InputForDecimals    = evmFuncHashByte("decimals()")
+	InputForTotalSupply = evmFuncHashByte("totalSupply()")
+)
 
 func isERC721(binHex string) bool {
 	return implementsAll(binHex,

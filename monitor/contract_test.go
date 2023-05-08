@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+func Test_marshall(t *testing.T) {
+	contractInfo := ContractInfo{Address: common.Address{0x01}, Bin: "01", Type: ERC20, TokenName: "myToken"}
+	jsonBytes := common.ToJson(contractInfo)
+	fmt.Println("contractInfo json: ", string(jsonBytes))
+}
+
 func Test_binCode(t *testing.T) {
 	totalSupplyBin := evmFuncHash("totalSupply()")
 
