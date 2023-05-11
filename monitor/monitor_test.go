@@ -20,11 +20,8 @@ func TestCollectEmbedTransfer(t *testing.T) {
 	CollectEmbedTransfer(blockNumber, txHash, from, to, amount)
 
 	txs := GetEmbedTransfer(blockNumber, txHash)
-	jsonBytes, err := toJson(txs)
-	if err != nil {
-		t.Error(err)
-	}
-	fmt.Println("txs=", string(jsonBytes))
+	json := common.ToJson(txs)
+	fmt.Println("txs=", string(json))
 }
 
 func TestMarshalProxyPattern(t *testing.T) {
@@ -46,14 +43,11 @@ func TestMarshalProxyPattern(t *testing.T) {
 	target := NewContractInfo(common.Address{0x012}, implCode)
 	var proxyPatternList []*ProxyPattern
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: caller, Implementation: target})
-	jsonStr, err := toJson(proxyPatternList)
-	if nil != err {
-		t.Fatal("failed to encode proxy patterns to json", "err", err)
-		return
-	}
+	json := common.ToJson(proxyPatternList)
+
 	fmt.Println("Marshal proxy patterns success", len(proxyPatternList))
-	fmt.Println("Marshal proxy patterns success", string(jsonStr))
+	fmt.Println("Marshal proxy patterns success", string(json))
 	var proxyList []*ProxyPattern
-	parseJson(jsonStr, &proxyList)
+	common.ParseJson(json, &proxyList)
 	fmt.Println("proxyList:", proxyList)
 }

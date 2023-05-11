@@ -31,7 +31,7 @@ func (t ContractType) String() string {
 
 var (
 	// 返回方法签名的hash, 这个hash将出现在合约的bin中，为了方便比较，返回hash的string(不含0x前缀)
-	evmFuncHashByte = func(funcName string) []byte {
+	evmFuncHashBytes = func(funcName string) []byte {
 		prefix := sha3.NewLegacyKeccak256()
 		prefix.Write([]byte(funcName))
 		return prefix.Sum(nil)[:4]
@@ -41,7 +41,15 @@ var (
 		prefix := sha3.NewLegacyKeccak256()
 		prefix.Write([]byte(funcName))
 		bin := hexutil.Encode(prefix.Sum(nil)[:4])
-		return bin[2:]
+		binHex := bin[2:]
+		found00 := false
+		for {
+			binHex, found00 = strings.CutPrefix(binHex, "00")
+			if !found00 {
+				break
+			}
+		}
+		return binHex
 	}
 
 	keccak256_eip1967 = func(data string) string {
@@ -68,14 +76,17 @@ var (
 )
 
 type ContractInfo struct {
-	Address          common.Address `json:"address"`
-	Code             []byte         `json:"-"`
-	Bin              string         `json:"bin,omitempty"`
-	Type             ContractType   `json:"contractType,omitempty"`
-	TokenName        string         `json:"tokenName,omitempty"`
-	TokenSymbol      string         `json:"tokenSymbol,omitempty"`
-	TokenDecimals    uint16         `json:"tokenDecimals,omitempty"`
-	TokenTotalSupply *big.Int       `json:"tokenTotalSupply,omitempty"`
+	Address                   common.Address `json:"address"`
+	Code                      []byte         `json:"-"`
+	Bin                       string         `json:"-"`
+	Type                      ContractType   `json:"contractType"` // 0 should be returned also
+	TokenName                 string         `json:"tokenName,omitempty"`
+	TokenSymbol               string         `json:"tokenSymbol,omitempty"`
+	TokenDecimals             uint16         `json:"tokenDecimals,omitempty"`
+	TokenTotalSupply          *big.Int       `json:"tokenTotalSupply,omitempty"`
+	IsSupportErc721Metadata   bool           `json:"isSupportErc721Metadata,omitempty"`
+	IsSupportErc721Enumerable bool           `json:"isSupportErc721Enumerable,omitempty"`
+	IsSupportErc1155Metadata  bool           `json:"isSupportErc1155Metadata,omitempty"`
 }
 
 func NewContractInfo(address common.Address, code []byte) *ContractInfo {
@@ -84,8 +95,16 @@ func NewContractInfo(address common.Address, code []byte) *ContractInfo {
 	instance.Code = code
 	instance.Type = GENERAL
 	if len(code) > 0 {
-		instance.Bin = hex.EncodeToString(code)
+		binHex := hex.EncodeToString(code)
+		instance.Bin = binHex
 		instance.Type = getType(instance.Bin)
+		if instance.Type == ERC721 {
+			instance.IsSupportErc721Metadata = isERC721Metadata(binHex)
+			instance.IsSupportErc721Enumerable = isERC721Enumerable(binHex)
+		}
+		if instance.Type == ERC1155 {
+			instance.IsSupportErc1155Metadata = isERC1155Metadata(binHex)
+		}
 	}
 	return instance
 }
@@ -99,13 +118,14 @@ func (c *ContractInfo) matchProxyPattern() bool {
 func getType(binHex string) ContractType {
 	if isERC20(binHex) {
 		return ERC20
-	} else if isERC721(binHex) {
-		return ERC721
-	} else if isERC1155(binHex) {
-		return ERC1155
-	} else {
-		return GENERAL
+	} else if isERC165(binHex) {
+		if isERC721(binHex) {
+			return ERC721
+		} else if isERC1155(binHex) {
+			return ERC1155
+		}
 	}
+	return GENERAL
 }
 
 func isERC20(binHex string) bool {
@@ -119,11 +139,15 @@ func isERC20(binHex string) bool {
 }
 
 var (
-	InputForName        = evmFuncHashByte("name()")
-	InputForSymbol      = evmFuncHashByte("symbol()")
-	InputForDecimals    = evmFuncHashByte("decimals()")
-	InputForTotalSupply = evmFuncHashByte("totalSupply()")
+	InputForName        = evmFuncHashBytes("name()")
+	InputForSymbol      = evmFuncHashBytes("symbol()")
+	InputForDecimals    = evmFuncHashBytes("decimals()")
+	InputForTotalSupply = evmFuncHashBytes("totalSupply()")
 )
+
+func isERC165(binHex string) bool {
+	return implements(binHex, "supportsInterface(bytes4)")
+}
 
 func isERC721(binHex string) bool {
 	return implementsAll(binHex,
@@ -137,6 +161,19 @@ func isERC721(binHex string) bool {
 		"safeTransferFrom(address,address,uint256)",
 		"safeTransferFrom(address,address,uint256,bytes)")
 }
+func isERC721Metadata(binHex string) bool {
+	return implementsAll(binHex,
+		"name()",
+		"symbol()",
+		"tokenURI(uint256)")
+}
+
+func isERC721Enumerable(binHex string) bool {
+	return implementsAll(binHex,
+		"totalSupply()",
+		"tokenByIndex(uint256)",
+		"tokenOfOwnerByIndex(address,uint256)")
+}
 
 func isERC1155(binHex string) bool {
 	return implementsAll(binHex,
@@ -146,6 +183,9 @@ func isERC1155(binHex string) bool {
 		"balanceOfBatch(address[],uint256[])",
 		"setApprovalForAll(address,bool)",
 		"isApprovedForAll(address,address)")
+}
+func isERC1155Metadata(binHex string) bool {
+	return implements(binHex, "uri(uint256)")
 }
 
 func implements(binHex string, funcName string) bool {

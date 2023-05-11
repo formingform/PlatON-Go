@@ -18,7 +18,6 @@ package vm
 
 import (
 	"context"
-	"github.com/PlatONnetwork/PlatON-Go/core"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math/big"
@@ -148,9 +147,6 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 // BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
 type BlockContext struct {
-	//block chain
-	Chain core.ChainContext
-
 	// CanTransfer returns whether the account contains
 	// sufficient ether to transfer the value
 	CanTransfer CanTransferFunc
@@ -579,11 +575,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 	contract.DeployContract = true
 
-	// stats: 收集新建的合约，不管是to为空时部署的合约，还是合约操作码opCreate/opCreate2都会走到这里
-	contractInfo := monitor.NewContractInfo(address, contract.Code)
-	log.Debug("new contract deployed in vm.create()", "contractInfo", string(common.ToJson(contractInfo)))
-	monitor.CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
-
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, address, gas, nil
 	}
@@ -611,6 +602,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 		if contract.UseGas(createDataGas) {
 			evm.StateDB.SetCode(address, ret)
+
+			// stats: 收集新建的合约，不管是to为空时部署的合约，还是合约操作码opCreate/opCreate2都会走到这里
+			contractInfo := monitor.NewContractInfo(address, contract.Code)
+			log.Debug("new contract deployed in vm.create()", "contractInfo", string(common.ToJson(contractInfo)))
+			monitor.CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}
@@ -632,6 +628,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.vmConfig.Debug && evm.depth == 0 {
 		evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 	}
+
 	return ret, address, contract.Gas, err
 
 }

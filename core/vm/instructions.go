@@ -1131,7 +1131,7 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 
 func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *monitor.ContractInfo) bool {
 	if callerInfo.Type == monitor.GENERAL {
-		if targetInfo.Type != monitor.GENERAL {
+		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
 			// get name/symbol/decimals /totalSupper
 			callerName, nameErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
@@ -1161,6 +1161,9 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *m
 				targetTotalSupply = new(big.Int).SetBytes(targetTotalSupplyBytes)
 			}
 
+			// the target bin seems as an ERC20, but we cannot retrieve its name, symbol, decimals or totalSupply
+			// the caller bin seems as a general contract, but we can retrieve its name, symbol, decimals or totalSupply
+			// so, we think the caller is a proxy, and the target is an implementation
 			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil &&
 				len(callerName) > 0 && len(targetName) == 0 &&
 				len(callerSymbol) > 0 && len(targetSymbol) == 0 &&
