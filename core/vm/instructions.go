@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"encoding/binary"
+	"bytes"
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
@@ -1146,22 +1146,22 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 			selfName, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
 
-			log.Debug("inspectProxyPattern", "selfName:", string(selfName), "targetName", string(targetName))
+			log.Debug("inspectProxyPattern", "selfName:", hex.EncodeToString(selfName), "targetName", string(targetName))
 
 			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
 
-			log.Debug("inspectProxyPattern", "selfSymbol:", string(selfSymbol), "targetSymbol", string(targetSymbol))
+			log.Debug("inspectProxyPattern", "selfSymbol:", selfSymbol, "selfSymbol", bytes.TrimSpace(selfSymbol))
 
 			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
-			var selfDecimals uint16 = 0
+			var selfDecimals *big.Int = big0
 			if decimalsErr1 != nil {
-				selfDecimals = binary.BigEndian.Uint16(selfDecimalsBytes)
+				selfDecimals = new(big.Int).SetBytes(selfDecimalsBytes)
 			}
 			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
-			var targetDecimals uint16 = 0
+			var targetDecimals *big.Int = big0
 			if decimalsErr2 != nil {
-				targetDecimals = binary.BigEndian.Uint16(targetDecimalsBytes)
+				targetDecimals = new(big.Int).SetBytes(selfDecimalsBytes)
 			}
 
 			log.Debug("inspectProxyPattern", "selfDecimalsBytes:", hex.EncodeToString(selfDecimalsBytes), "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
@@ -1186,11 +1186,11 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil &&
 				len(selfName) > 0 && len(targetName) == 0 &&
 				len(selfSymbol) > 0 && len(targetSymbol) == 0 &&
-				selfDecimals > 0 && targetDecimals == 0 &&
+				selfDecimals.Cmp(big0) > 0 && targetDecimals.Cmp(big0) == 0 &&
 				selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
 				targetInfo.TokenName = string(selfName)
 				targetInfo.TokenSymbol = string(selfSymbol)
-				targetInfo.TokenDecimals = selfDecimals
+				targetInfo.TokenDecimals = uint16(selfDecimals.Uint64())
 				targetInfo.TokenTotalSupply = selfTotalSupply
 				return true
 			}
