@@ -804,6 +804,8 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
 	}
 
+	log.Debug("delegate call details", "toAddr", toAddr.Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex())
+
 	// TODO:
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
 	callerInfo := monitor.NewContractInfo(callContext.contract.CallerAddress, interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress))
