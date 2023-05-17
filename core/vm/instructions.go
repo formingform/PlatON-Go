@@ -1146,12 +1146,12 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 			selfName, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
 
-			log.Debug("inspectProxyPattern", "callerName:", selfName, "targetName", targetName)
+			log.Debug("inspectProxyPattern", "selfName:", string(selfName), "targetName", string(targetName))
 
 			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
 
-			log.Debug("inspectProxyPattern", "callerSymbol:", selfSymbol, "targetSymbol", targetSymbol)
+			log.Debug("inspectProxyPattern", "selfSymbol:", string(selfSymbol), "targetSymbol", string(targetSymbol))
 
 			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
 			var selfDecimals uint16 = 0
