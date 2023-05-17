@@ -804,20 +804,21 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
 	}
 
-	log.Debug("delegate call details", "toAddr", toAddr.Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex(),
-		"caller", callContext.contract.caller.Address().Hex(), "self", callContext.contract.self.Address().Hex())
+	log.Debug("delegate call details", "callContext.contract.self.Address()", callContext.contract.self.Address().Hex(), "toAddr", toAddr.Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex(),
+		"callContext.contract.caller.Address", callContext.contract.caller.Address().Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex())
 
 	// TODO:
+	// caller means the sender of the raw transaction, but not the proxy contract address.
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
-	callerInfo := monitor.NewContractInfo(callContext.contract.CallerAddress, interpreter.evm.StateDB.GetCode(callContext.contract.CallerAddress))
+	selfInfo := monitor.NewContractInfo(callContext.contract.self.Address(), interpreter.evm.StateDB.GetCode(callContext.contract.self.Address()))
 	targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
-	log.Debug("delegate call details", "caller", string(common.ToJson(callerInfo)), "target", string(common.ToJson(targetInfo)))
+	log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
 
-	isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, callerInfo, targetInfo)
+	isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
 	//---
 	if isProxyPattern == true {
 		log.Debug("proxy pattern found")
-		monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), callerInfo, targetInfo)
+		monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
 	} else {
 		log.Debug("proxy pattern not found")
 	}
@@ -1132,25 +1133,25 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 	return contractInfo
 }*/
 
-func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *monitor.ContractInfo) bool {
-	log.Debug("inspectProxyPattern", "callerInfo.Type==3", callerInfo.Type == monitor.GENERAL, "targetInfo.Type==0", targetInfo.Type == monitor.ERC20)
-	if callerInfo.Type == monitor.GENERAL {
+func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
+	log.Debug("inspectProxyPattern", "selfInfo.Type==3", selfInfo.Type == monitor.GENERAL, "targetInfo.Type==0", targetInfo.Type == monitor.ERC20)
+	if selfInfo.Type == monitor.GENERAL {
 		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
 			// get name/symbol/decimals /totalSupper
-			callerName, nameErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForName)
+			selfName, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
 
-			log.Debug("inspectProxyPattern", "callerName:", callerName, "targetName", targetName)
+			log.Debug("inspectProxyPattern", "callerName:", selfName, "targetName", targetName)
 
-			callerSymbol, symbolErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForSymbol)
+			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
 
-			log.Debug("inspectProxyPattern", "callerSymbol:", callerSymbol, "targetSymbol", targetSymbol)
+			log.Debug("inspectProxyPattern", "callerSymbol:", selfSymbol, "targetSymbol", targetSymbol)
 
-			callDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForDecimals)
-			var callDecimals uint16 = 0
+			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
+			var selfDecimals uint16 = 0
 			if decimalsErr1 != nil {
-				callDecimals = binary.BigEndian.Uint16(callDecimalsBytes)
+				selfDecimals = binary.BigEndian.Uint16(selfDecimalsBytes)
 			}
 			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
 			var targetDecimals uint16 = 0
@@ -1158,34 +1159,34 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *m
 				targetDecimals = binary.BigEndian.Uint16(targetDecimalsBytes)
 			}
 
-			log.Debug("inspectProxyPattern", "callDecimalsBytes:", hex.EncodeToString(callDecimalsBytes), "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
-			log.Debug("inspectProxyPattern", "callDecimals:", callDecimals, "targetDecimals", targetDecimals)
+			log.Debug("inspectProxyPattern", "selfDecimalsBytes:", hex.EncodeToString(selfDecimalsBytes), "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
+			log.Debug("inspectProxyPattern", "selfDecimals:", selfDecimals, "targetDecimals", targetDecimals)
 
-			callTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForTotalSupply)
-			var callTotalSupply *big.Int = big0
+			selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
+			var selfTotalSupply *big.Int = big0
 			if decimalsErr1 != nil {
-				callTotalSupply = new(big.Int).SetBytes(callTotalSupplyBytes)
+				selfTotalSupply = new(big.Int).SetBytes(selfTotalSupplyBytes)
 			}
 			targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
 			var targetTotalSupply *big.Int = big0
 			if totalSupplyErr2 != nil {
 				targetTotalSupply = new(big.Int).SetBytes(targetTotalSupplyBytes)
 			}
-			log.Debug("inspectProxyPattern", "callTotalSupplyBytes:", hex.EncodeToString(callTotalSupplyBytes), "targetTotalSupplyBytes", hex.EncodeToString(targetTotalSupplyBytes))
-			log.Debug("inspectProxyPattern", "callTotalSupply:", callTotalSupply, "targetTotalSupply", targetTotalSupply)
+			log.Debug("inspectProxyPattern", "selfTotalSupplyBytes:", hex.EncodeToString(selfTotalSupplyBytes), "targetTotalSupplyBytes", hex.EncodeToString(targetTotalSupplyBytes))
+			log.Debug("inspectProxyPattern", "selfTotalSupply:", selfTotalSupply, "targetTotalSupply", targetTotalSupply)
 
 			// the target bin seems as an ERC20, but we cannot retrieve its name, symbol, decimals or totalSupply
 			// the caller bin seems as a general contract, but we can retrieve its name, symbol, decimals or totalSupply
 			// so, we think the caller is a proxy, and the target is an implementation
 			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil &&
-				len(callerName) > 0 && len(targetName) == 0 &&
-				len(callerSymbol) > 0 && len(targetSymbol) == 0 &&
-				callDecimals > 0 && targetDecimals == 0 &&
-				callTotalSupply.Cmp(big0) > 0 && targetTotalSupply.Cmp(big0) == 0 {
-				targetInfo.TokenName = string(callerName)
-				targetInfo.TokenSymbol = string(callerSymbol)
-				targetInfo.TokenDecimals = callDecimals
-				targetInfo.TokenTotalSupply = callTotalSupply
+				len(selfName) > 0 && len(targetName) == 0 &&
+				len(selfSymbol) > 0 && len(targetSymbol) == 0 &&
+				selfDecimals > 0 && targetDecimals == 0 &&
+				selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
+				targetInfo.TokenName = string(selfName)
+				targetInfo.TokenSymbol = string(selfSymbol)
+				targetInfo.TokenDecimals = selfDecimals
+				targetInfo.TokenTotalSupply = selfTotalSupply
 				return true
 			}
 		}
