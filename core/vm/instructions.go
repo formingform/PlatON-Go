@@ -1151,7 +1151,7 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
 
-			log.Debug("inspectProxyPattern", "selfSymbol:", selfSymbol, "selfSymbol", bytes.TrimSpace(selfSymbol))
+			log.Debug("inspectProxyPattern", "selfSymbol:", selfSymbol, "q", bytes.TrimSpace(selfSymbol))
 
 			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
 			var selfDecimals *big.Int = big0
