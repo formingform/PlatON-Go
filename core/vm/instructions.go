@@ -814,15 +814,16 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
 	log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
 
-	isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
-	//---
-	if isProxyPattern == true {
-		log.Debug("proxy pattern found")
-		monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
-	} else {
-		log.Debug("proxy pattern not found")
+	if !interpreter.evm.vmConfig.ProxyInspected {
+		isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+		//---
+		if isProxyPattern == true {
+			log.Debug("proxy pattern found")
+			monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
+		} else {
+			log.Debug("proxy pattern not found")
+		}
 	}
-
 	return ret, nil
 }
 
@@ -1135,6 +1136,10 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 
 func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
 	log.Debug("inspectProxyPattern", "selfInfo.Type==3", selfInfo.Type == monitor.GENERAL, "targetInfo.Type==0", targetInfo.Type == monitor.ERC20)
+
+	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
+	evm.vmConfig.ProxyInspected = true
+
 	if selfInfo.Type == monitor.GENERAL {
 		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
 			// get name/symbol/decimals /totalSupper

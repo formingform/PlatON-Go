@@ -35,6 +35,8 @@ type Config struct {
 	// delegate call and create
 	NoRecursion bool
 
+	ProxyInspected bool
+
 	// JumpTable contains the EVM instruction table. This
 	// may be left uninitialised and will be set to the default table.
 	JumpTable [256]*operation
