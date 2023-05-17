@@ -1130,14 +1130,19 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 }*/
 
 func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *monitor.ContractInfo) bool {
+	log.Debug("inspectProxyPattern", "callerInfo.Type==3", callerInfo.Type == monitor.GENERAL, "targetInfo.Type==0", targetInfo.Type == monitor.ERC20)
 	if callerInfo.Type == monitor.GENERAL {
 		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
 			// get name/symbol/decimals /totalSupper
 			callerName, nameErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
 
+			log.Debug("inspectProxyPattern", "callerName:", callerName, "targetName", targetName)
+
 			callerSymbol, symbolErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
+
+			log.Debug("inspectProxyPattern", "callerSymbol:", callerSymbol, "targetSymbol", targetSymbol)
 
 			callDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForDecimals)
 			var callDecimals uint16 = 0
@@ -1150,6 +1155,9 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *m
 				targetDecimals = binary.BigEndian.Uint16(targetDecimalsBytes)
 			}
 
+			log.Debug("inspectProxyPattern", "callDecimalsBytes:", hex.EncodeToString(callDecimalsBytes), "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
+			log.Debug("inspectProxyPattern", "callDecimals:", callDecimals, "targetDecimals", targetDecimals)
+
 			callTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, callerInfo.Address, monitor.InputForTotalSupply)
 			var callTotalSupply *big.Int = big0
 			if decimalsErr1 != nil {
@@ -1160,6 +1168,8 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, callerInfo, targetInfo *m
 			if totalSupplyErr2 != nil {
 				targetTotalSupply = new(big.Int).SetBytes(targetTotalSupplyBytes)
 			}
+			log.Debug("inspectProxyPattern", "callTotalSupplyBytes:", hex.EncodeToString(callTotalSupplyBytes), "targetTotalSupplyBytes", hex.EncodeToString(targetTotalSupplyBytes))
+			log.Debug("inspectProxyPattern", "callTotalSupply:", callTotalSupply, "targetTotalSupply", targetTotalSupply)
 
 			// the target bin seems as an ERC20, but we cannot retrieve its name, symbol, decimals or totalSupply
 			// the caller bin seems as a general contract, but we can retrieve its name, symbol, decimals or totalSupply

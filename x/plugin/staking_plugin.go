@@ -4492,7 +4492,7 @@ func (sk *StakingPlugin) SetValidator(block *types.Block, numStr string, nodeId 
 
 	STAKING_DB.HistoryDB.Put([]byte(ValidatorName+numStr), data)
 	log.Debug("wow,insert validator history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", ValidatorName+numStr)
-	log.Debug("wow,insert validator history :", currentValidatorArray)
+	log.Debug("wow,insert validator history", "currentValidatorArray", currentValidatorArray)
 	return isCurr, currMap, nil
 }
 

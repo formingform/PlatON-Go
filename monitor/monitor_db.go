@@ -92,7 +92,7 @@ func (db *MonitorDB) Close() error {
 
 func SetDBPath(path string) {
 	dbpath = path
-	logger.Info("set path", "path", dbpath)
+	logger.Info("set monitor db", "path", dbpath)
 }
 
 func SetDBOptions(cache int, handles int) {
@@ -104,12 +104,12 @@ func getMonitorDB() *MonitorDB {
 	instance.Lock()
 	defer instance.Unlock()
 	if dbInstance == nil || dbInstance.closed {
-		logger.Debug("dbInstance is nil", "path", dbpath)
+		logger.Debug("monitor dbInstance is nil", "path", dbpath)
 		if dbInstance == nil {
 			dbInstance = new(MonitorDB)
 		}
 		if levelDB, err := openLevelDB(levelDBcache, levelDBhandles); err != nil {
-			logger.Error("init db fail", "err", err)
+			logger.Error("init monitor db fail", "err", err)
 			panic(err)
 		} else {
 			dbInstance.levelDB = levelDB

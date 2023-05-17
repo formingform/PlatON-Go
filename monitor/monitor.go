@@ -17,7 +17,7 @@ const (
 
 // 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
 func (dbKey MonitorDbKey) String() string {
-	return [...]string{"EmbedTransferTx"}[dbKey]
+	return [...]string{"EmbedTransferTx", "CreatedContractKey", "SuicidedContractKey", "ProxyPatternKey"}[dbKey]
 }
 
 type EmbedTransfer struct {
@@ -81,6 +81,8 @@ type ContractRef interface {
 }
 
 func CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
+	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(common.ToJson(contractInfo)))
+
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
