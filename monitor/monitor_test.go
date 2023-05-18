@@ -8,6 +8,11 @@ import (
 	"testing"
 )
 
+func TestDecodeAbi(t *testing.T) {
+	decimals, _ := hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000d5")
+	d := new(big.Int).SetBytes(decimals)
+	fmt.Println(d.Uint64())
+}
 func TestCollectEmbedTransfer(t *testing.T) {
 	SetDBPath("/home/joey/monitor_db")
 

@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"bytes"
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
@@ -1145,27 +1144,29 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 			// get name/symbol/decimals /totalSupper
 			selfName, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
-
-			log.Debug("inspectProxyPattern", "selfName:", hex.EncodeToString(selfName), "targetName", string(targetName))
+			log.Debug("inspectProxyPattern", "selfName1", selfName, "selfName2", hex.EncodeToString(selfName), "selfName3", string(selfName))
 
 			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
-
-			log.Debug("inspectProxyPattern", "selfSymbol:", selfSymbol, "q", bytes.TrimSpace(selfSymbol))
+			log.Debug("inspectProxyPattern", "selfSymbol1", selfSymbol, "selfSymbol2", hex.EncodeToString(selfSymbol), "selfSymbol3", string(selfSymbol))
 
 			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
 			var selfDecimals *big.Int = big0
 			if decimalsErr1 != nil {
+				log.Debug("parse decimals", "selfDecimalsBytes", hex.EncodeToString(selfDecimalsBytes))
 				selfDecimals = new(big.Int).SetBytes(selfDecimalsBytes)
+			} else {
+				log.Debug("decimalsErr1", "err", decimalsErr1)
 			}
+			log.Debug("inspectProxyPattern", "selfDecimals:", selfDecimals, "targetDecimals", hex.EncodeToString(selfDecimalsBytes))
+
 			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
 			var targetDecimals *big.Int = big0
 			if decimalsErr2 != nil {
-				targetDecimals = new(big.Int).SetBytes(selfDecimalsBytes)
+				log.Debug("parse decimals", "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
+				targetDecimals = new(big.Int).SetBytes(targetDecimalsBytes)
 			}
-
-			log.Debug("inspectProxyPattern", "selfDecimalsBytes:", hex.EncodeToString(selfDecimalsBytes), "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
-			log.Debug("inspectProxyPattern", "selfDecimals:", selfDecimals, "targetDecimals", targetDecimals)
+			log.Debug("inspectProxyPattern", "targetDecimals:", targetDecimals, "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
 
 			selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
 			var selfTotalSupply *big.Int = big0
