@@ -214,7 +214,13 @@ func TestDecodeByAbi(t *testing.T) {
 func TestErcAbi(t *testing.T) {
 	nameBytes, _ := hexutil.Decode("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000074443532055534400000000000000000000000000000000000000000000000000")
 	var decimalsBytes, _ = hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000d5")
+	var totalSupplyBytes, _ = hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000004d2")
 
 	fmt.Println(UnpackName(nameBytes))
 	fmt.Println(UnpackDecimals(decimalsBytes))
+	fmt.Println(UnpackTotalSupply(totalSupplyBytes))
+}
+
+func TestMintHash(t *testing.T) {
+	fmt.Println(evmFuncHash("mint(address,uint256)"))
 }

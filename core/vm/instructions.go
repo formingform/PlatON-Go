@@ -802,24 +802,23 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
 	}
 
-	log.Debug("delegate call details", "callContext.contract.self.Address()", callContext.contract.self.Address().Hex(), "toAddr", toAddr.Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex(),
-		"callContext.contract.caller.Address", callContext.contract.caller.Address().Hex(), "callContext.contract.CallerAddress", callContext.contract.CallerAddress.Hex())
-
 	// TODO:
 	// caller means the sender of the raw transaction, but not the proxy contract address.
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
-	selfInfo := monitor.NewContractInfo(callContext.contract.self.Address(), interpreter.evm.StateDB.GetCode(callContext.contract.self.Address()))
-	targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
-	log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
-
 	if !interpreter.evm.vmConfig.ProxyInspected {
-		isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
-		//---
-		if isProxyPattern == true {
-			log.Debug("proxy pattern found")
-			monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
-		} else {
-			log.Debug("proxy pattern not found")
+		if !monitor.IsProxied(callContext.contract.self.Address(), toAddr) {
+			selfInfo := monitor.NewContractInfo(callContext.contract.self.Address(), interpreter.evm.StateDB.GetCode(callContext.contract.self.Address()))
+			targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
+			log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
+
+			isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+			//---
+			if isProxyPattern == true {
+				log.Debug("proxy pattern found")
+				monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
+			} else {
+				log.Debug("proxy pattern not found")
+			}
 		}
 	}
 	return ret, nil

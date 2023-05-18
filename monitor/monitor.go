@@ -13,11 +13,12 @@ const (
 	CreatedContractKey
 	SuicidedContractKey
 	ProxyPatternKey
+	proxyPatternMapKey
 )
 
 // 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
 func (dbKey MonitorDbKey) String() string {
-	return [...]string{"EmbedTransferTx", "CreatedContractKey", "SuicidedContractKey", "ProxyPatternKey"}[dbKey]
+	return [...]string{"EmbedTransferTx", "CreatedContractKey", "SuicidedContractKey", "ProxyPatternKey", "proxyPatternMapKey"}[dbKey]
 }
 
 type EmbedTransfer struct {
@@ -169,7 +170,6 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 
 	var proxyPatternList []*ProxyPattern
 	common.ParseJson(data, &proxyPatternList)
-
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
 	json := common.ToJson(proxyPatternList)
@@ -178,6 +178,42 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 		log.Debug("save proxy patterns success")
 	}
 
+	// === to save the proxy map to local db
+
+	dbMapKey := proxyPatternMapKey.String()
+	data, err = getMonitorDB().GetLevelDB([]byte(dbMapKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load proxy map", "err", err)
+		return
+	}
+
+	var proxyPatternMap map[common.Address]common.Address
+	common.ParseJson(data, &proxyPatternMap)
+	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
+
+	json = common.ToJson(proxyPatternMap)
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbMapKey), json)
+		log.Debug("save proxy map success")
+	}
+}
+
+func IsProxied(self, target common.Address) bool {
+	dbMapKey := proxyPatternMapKey.String()
+	data, err := getMonitorDB().GetLevelDB([]byte(dbMapKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load proxy map", "err", err)
+		return false
+	}
+
+	var proxyPatternMap map[common.Address]common.Address
+	common.ParseJson(data, &proxyPatternMap)
+	if value, exist := proxyPatternMap[self]; exist {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
