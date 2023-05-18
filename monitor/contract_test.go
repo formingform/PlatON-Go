@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/accounts/abi"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"strings"
@@ -138,4 +139,82 @@ func Test_buildABI(t *testing.T) {
 
 	uriMethod := evmFuncHashBytes("uri(uint256)")
 	fmt.Println("uriMethod:", hex.EncodeToString(uriMethod))
+}
+
+func TestDecode_decimals(t *testing.T) {
+	var decimalsBytes, _ = hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000d5")
+
+	methodMap := make(map[string]abi.Method)
+
+	uintType := abi.Type{T: abi.UintTy}
+	uintArgu := abi.Argument{Name: "decimals", Type: uintType}
+
+	methodMap["decimals"] = abi.Method{Name: "decimals", RawName: "decimals", Type: abi.Function, Inputs: nil, Outputs: abi.Arguments{uintArgu}}
+
+	abi := &abi.ABI{
+		Methods: methodMap,
+	}
+	ret, err := abi.Unpack("decimals", decimalsBytes)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(ret[0])
+	}
+}
+
+func TestDecode_name(t *testing.T) {
+	nameBytes, _ := hexutil.Decode("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000074443532055534400000000000000000000000000000000000000000000000000")
+
+	/*abi:= []string{`
+		[
+			{"type":"function","name":"named","constant":true,"inputs":[],"outputs":[{"name":"str","type":"string"}]}
+		]
+	`}*/
+	methodMap := make(map[string]abi.Method)
+
+	stringType := abi.Type{T: abi.StringTy}
+	stringArgu := abi.Argument{Name: "str", Type: stringType}
+
+	methodMap["name"] = abi.Method{Name: "name", RawName: "name", Type: abi.Function, Inputs: nil, Outputs: abi.Arguments{stringArgu}}
+
+	abi := &abi.ABI{
+		Methods: methodMap,
+	}
+	ret, err := abi.Unpack("name", nameBytes)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(ret[0])
+	}
+
+}
+
+func TestDecodeByAbi(t *testing.T) {
+	nameBytes, _ := hexutil.Decode("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000074443532055534400000000000000000000000000000000000000000000000000")
+
+	jsondata := `
+[
+	{"type":"function","name":"name","outputs":[{"name":"a","type":"string"}]},
+	{"type":"function","name":"decimals","outputs":[{"name":"a","type":"uint8"}]}
+]`
+
+	abi, err := abi.JSON(strings.NewReader(jsondata))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, err := abi.Unpack("name", nameBytes)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(ret[0])
+	}
+}
+
+func TestErcAbi(t *testing.T) {
+	nameBytes, _ := hexutil.Decode("0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000074443532055534400000000000000000000000000000000000000000000000000")
+	var decimalsBytes, _ = hexutil.Decode("0x00000000000000000000000000000000000000000000000000000000000000d5")
+
+	fmt.Println(UnpackName(nameBytes))
+	fmt.Println(UnpackDecimals(decimalsBytes))
 }

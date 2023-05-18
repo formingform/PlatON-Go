@@ -28,7 +28,6 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/x/staking"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-	"math/big"
 	"strconv"
 )
 
@@ -1142,58 +1141,45 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 	if selfInfo.Type == monitor.GENERAL {
 		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
 			// get name/symbol/decimals /totalSupper
-			selfName, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
-			targetName, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
-			log.Debug("inspectProxyPattern", "selfName1", selfName, "selfName2", hex.EncodeToString(selfName), "selfName3", string(selfName))
+			selfNameBytes, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
+			targetNameBytes, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
 
-			selfSymbol, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
-			targetSymbol, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
-			log.Debug("inspectProxyPattern", "selfSymbol1", selfSymbol, "selfSymbol2", hex.EncodeToString(selfSymbol), "selfSymbol3", string(selfSymbol))
+			selfSymbolBytes, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
+			targetSymbolBytes, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
 
 			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
-			var selfDecimals *big.Int = big0
-			if decimalsErr1 != nil {
-				log.Debug("parse decimals", "selfDecimalsBytes", hex.EncodeToString(selfDecimalsBytes))
-				selfDecimals = new(big.Int).SetBytes(selfDecimalsBytes)
-			} else {
-				log.Debug("decimalsErr1", "err", decimalsErr1)
-			}
-			log.Debug("inspectProxyPattern", "selfDecimals:", selfDecimals, "targetDecimals", hex.EncodeToString(selfDecimalsBytes))
-
 			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
-			var targetDecimals *big.Int = big0
-			if decimalsErr2 != nil {
-				log.Debug("parse decimals", "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
-				targetDecimals = new(big.Int).SetBytes(targetDecimalsBytes)
-			}
-			log.Debug("inspectProxyPattern", "targetDecimals:", targetDecimals, "targetDecimalsBytes", hex.EncodeToString(targetDecimalsBytes))
 
 			selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
-			var selfTotalSupply *big.Int = big0
-			if decimalsErr1 != nil {
-				selfTotalSupply = new(big.Int).SetBytes(selfTotalSupplyBytes)
-			}
 			targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
-			var targetTotalSupply *big.Int = big0
-			if totalSupplyErr2 != nil {
-				targetTotalSupply = new(big.Int).SetBytes(targetTotalSupplyBytes)
-			}
-			log.Debug("inspectProxyPattern", "selfTotalSupplyBytes:", hex.EncodeToString(selfTotalSupplyBytes), "targetTotalSupplyBytes", hex.EncodeToString(targetTotalSupplyBytes))
-			log.Debug("inspectProxyPattern", "selfTotalSupply:", selfTotalSupply, "targetTotalSupply", targetTotalSupply)
 
+			log.Debug("inspectProxyPattern", "selfNameBytes", hex.EncodeToString(selfNameBytes), "selfSymbolBytes", hex.EncodeToString(selfSymbolBytes), "selfDecimalsBytes", hex.EncodeToString(selfDecimalsBytes), "selfTotalSupplyBytes", hex.EncodeToString(selfTotalSupplyBytes))
 			// the target bin seems as an ERC20, but we cannot retrieve its name, symbol, decimals or totalSupply
 			// the caller bin seems as a general contract, but we can retrieve its name, symbol, decimals or totalSupply
 			// so, we think the caller is a proxy, and the target is an implementation
-			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil &&
-				len(selfName) > 0 && len(targetName) == 0 &&
-				len(selfSymbol) > 0 && len(targetSymbol) == 0 &&
-				selfDecimals.Cmp(big0) > 0 && targetDecimals.Cmp(big0) == 0 &&
-				selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
-				targetInfo.TokenName = string(selfName)
-				targetInfo.TokenSymbol = string(selfSymbol)
-				targetInfo.TokenDecimals = uint16(selfDecimals.Uint64())
-				targetInfo.TokenTotalSupply = selfTotalSupply
-				return true
+			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil {
+				selfName := monitor.UnpackName(selfNameBytes)
+				targetName := monitor.UnpackName(targetNameBytes)
+
+				selfSymbol := monitor.UnpackSymbol(selfSymbolBytes)
+				targetSymbol := monitor.UnpackSymbol(targetSymbolBytes)
+
+				selfDecimals := monitor.UnpackDecimals(selfDecimalsBytes)
+				targetDecimals := monitor.UnpackDecimals(targetDecimalsBytes)
+
+				selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
+				targetTotalSupply := monitor.UnpackTotalSupply(targetTotalSupplyBytes)
+				if len(selfName) > 0 && len(targetName) == 0 &&
+					len(selfSymbol) > 0 && len(targetSymbol) == 0 &&
+					selfDecimals > 0 && targetDecimals == 0 &&
+					selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
+					targetInfo.TokenName = selfName
+					targetInfo.TokenSymbol = selfSymbol
+					targetInfo.TokenDecimals = selfDecimals
+					targetInfo.TokenTotalSupply = selfTotalSupply
+					return true
+				}
+
 			}
 		}
 	}

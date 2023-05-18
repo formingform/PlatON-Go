@@ -2,8 +2,10 @@ package monitor
 
 import (
 	"encoding/hex"
+	"github.com/PlatONnetwork/PlatON-Go/accounts/abi"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
+	"github.com/PlatONnetwork/PlatON-Go/log"
 	"golang.org/x/crypto/sha3"
 	"math/big"
 	"strings"
@@ -82,7 +84,7 @@ type ContractInfo struct {
 	Type                      ContractType   `json:"contractType"` // 0 should be returned also
 	TokenName                 string         `json:"tokenName,omitempty"`
 	TokenSymbol               string         `json:"tokenSymbol,omitempty"`
-	TokenDecimals             uint16         `json:"tokenDecimals,omitempty"`
+	TokenDecimals             uint8          `json:"tokenDecimals,omitempty"`
 	TokenTotalSupply          *big.Int       `json:"tokenTotalSupply,omitempty"`
 	IsSupportErc721Metadata   bool           `json:"isSupportErc721Metadata,omitempty"`
 	IsSupportErc721Enumerable bool           `json:"isSupportErc721Enumerable,omitempty"`
@@ -208,4 +210,77 @@ func implementsAnyOf(binHex string, funcNames ...string) bool {
 		}
 	}
 	return false
+}
+
+var abiStringType, _ = abi.NewType("string", "", nil)
+var abiUint8Type, _ = abi.NewType("uint8", "", nil)
+var abiUint256Type, _ = abi.NewType("uint256", "", nil)
+var erc20Methods = map[string]abi.Method{
+	"balance":     abi.NewMethod("balance", "balance", abi.Function, "view", false, false, nil, []abi.Argument{{"amount", abiUint256Type, false}}),
+	"name":        abi.NewMethod("name", "name", abi.Function, "view", false, false, nil, []abi.Argument{{"nameStr", abiStringType, false}}),
+	"symbol":      abi.NewMethod("symbol", "symbol", abi.Function, "view", false, false, nil, []abi.Argument{{"symbolStr", abiStringType, false}}),
+	"decimals":    abi.NewMethod("decimals", "decimals", abi.Function, "view", false, false, nil, []abi.Argument{{"num", abiUint8Type, false}}),
+	"totalSupply": abi.NewMethod("totalSupply", "totalSupply", abi.Function, "view", false, false, nil, []abi.Argument{{"symbol", abiUint256Type, false}}),
+}
+
+var erc20Abi = abi.ABI{
+	Methods: erc20Methods,
+}
+
+func UnpackName(callOutput []byte) string {
+	ret, err := erc20Abi.Unpack("name", callOutput)
+	if err != nil || len(ret) == 0 {
+		return string([]byte{})
+	} else {
+		name, ok := ret[0].(string)
+		if ok {
+			return name
+		} else {
+			return string([]byte{})
+		}
+	}
+}
+
+func UnpackSymbol(callOutput []byte) string {
+	ret, err := erc20Abi.Unpack("symbol", callOutput)
+	if err != nil || len(ret) == 0 {
+		return string([]byte{})
+	} else {
+		name, ok := ret[0].(string)
+		if ok {
+			return name
+		} else {
+			return string([]byte{})
+		}
+	}
+}
+
+func UnpackDecimals(callOutput []byte) uint8 {
+	ret, err := erc20Abi.Unpack("decimals", callOutput)
+	if err != nil || len(ret) == 0 {
+		return 0
+	} else {
+		decimals, ok := ret[0].(uint8)
+		if ok {
+			return decimals
+		} else {
+			return 0
+		}
+	}
+}
+
+func UnpackTotalSupply(callOutput []byte) *big.Int {
+	ret, err := erc20Abi.Unpack("totalSupply", callOutput)
+	log.Debug("UnpackTotalSupply", "callOutput", callOutput, "pack ret", ret)
+	if err != nil || len(ret) == 0 {
+		return big.NewInt(0)
+	} else {
+		log.Debug("UnpackTotalSupply", "callOutput[0]", ret[0])
+		totalSupplyBytes, ok := ret[0].([]byte)
+		if ok {
+			return new(big.Int).SetBytes(totalSupplyBytes)
+		} else {
+			return big.NewInt(0)
+		}
+	}
 }
