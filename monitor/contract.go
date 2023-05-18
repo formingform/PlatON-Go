@@ -276,9 +276,9 @@ func UnpackTotalSupply(callOutput []byte) *big.Int {
 		return big.NewInt(0)
 	} else {
 		log.Debug("UnpackTotalSupply", "callOutput[0]", ret[0])
-		totalSupplyBytes, ok := ret[0].([]byte)
+		totalSupply, ok := ret[0].(*big.Int)
 		if ok {
-			return new(big.Int).SetBytes(totalSupplyBytes)
+			return totalSupply
 		} else {
 			return big.NewInt(0)
 		}
