@@ -215,8 +215,9 @@ func implementsAnyOf(binHex string, funcNames ...string) bool {
 var abiStringType, _ = abi.NewType("string", "", nil)
 var abiUint8Type, _ = abi.NewType("uint8", "", nil)
 var abiUint256Type, _ = abi.NewType("uint256", "", nil)
+var abiAddressType, _ = abi.NewType("address", "", nil)
 var erc20Methods = map[string]abi.Method{
-	"balance":     abi.NewMethod("balance", "balance", abi.Function, "view", false, false, nil, []abi.Argument{{"amount", abiUint256Type, false}}),
+	"balanceOf":   abi.NewMethod("balanceOf", "balanceOf", abi.Function, "view", false, false, []abi.Argument{{"address", abiAddressType, false}}, []abi.Argument{{"amount", abiUint256Type, false}}),
 	"name":        abi.NewMethod("name", "name", abi.Function, "view", false, false, nil, []abi.Argument{{"nameStr", abiStringType, false}}),
 	"symbol":      abi.NewMethod("symbol", "symbol", abi.Function, "view", false, false, nil, []abi.Argument{{"symbolStr", abiStringType, false}}),
 	"decimals":    abi.NewMethod("decimals", "decimals", abi.Function, "view", false, false, nil, []abi.Argument{{"num", abiUint8Type, false}}),
