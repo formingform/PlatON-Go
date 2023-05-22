@@ -187,7 +187,7 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 		return
 	}
 
-	var proxyPatternMap map[common.Address]common.Address
+	var proxyPatternMap = make(map[common.Address]common.Address)
 	common.ParseJson(data, &proxyPatternMap)
 	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
 

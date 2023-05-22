@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
+	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
 	"testing"
 )
@@ -50,4 +51,63 @@ func TestMarshalProxyPattern(t *testing.T) {
 	var proxyList []*ProxyPattern
 	common.ParseJson(json, &proxyList)
 	fmt.Println("proxyList:", proxyList)
+}
+
+func TestLoadProxyPattern(t *testing.T) {
+	SetDBPath("/home/joey/monitor_db")
+	selfInfo := NewContractInfo(common.Address{0x01}, []byte{0x01})
+	targetInfo := NewContractInfo(common.Address{0x022}, []byte{0x041})
+
+	txHash := common.Hash{0x021, 0x02, 0x3, 0x9, 0x4}
+
+	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
+	getMonitorDB().DeleteLevelDB([]byte(dbKey))
+	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load proxy patterns", "err", err)
+		return
+	}
+
+	var proxyPatternList []*ProxyPattern
+	common.ParseJson(data, &proxyPatternList)
+	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: selfInfo, Implementation: targetInfo})
+
+	json := common.ToJson(proxyPatternList)
+	fmt.Println("json:" + string(json))
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		log.Debug("save proxy patterns success")
+	}
+
+}
+
+func TestLoadProxyPatternMap(t *testing.T) {
+
+	SetDBPath("/home/joey/monitor_db")
+
+	selfInfo := NewContractInfo(common.Address{0x01}, []byte{0x01})
+	targetInfo := NewContractInfo(common.Address{0x02}, []byte{0x01})
+
+	dbMapKey := proxyPatternMapKey.String()
+	getMonitorDB().DeleteLevelDB([]byte(dbMapKey))
+
+	data, err := getMonitorDB().GetLevelDB([]byte(dbMapKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load proxy map", "err", err)
+		return
+	}
+
+	var proxyPatternMap = make(map[common.Address]common.Address)
+	common.ParseJson(data, &proxyPatternMap)
+	/*if proxyPatternMap == nil {
+		proxyPatternMap = make(map[common.Address]common.Address)
+	}*/
+	proxyPatternMap[selfInfo.Address] = targetInfo.Address
+
+	json := common.ToJson(proxyPatternMap)
+	fmt.Println("json:" + string(json))
+	if len(json) > 0 {
+		getMonitorDB().PutLevelDB([]byte(dbMapKey), json)
+		log.Debug("save proxy map success")
+	}
 }
