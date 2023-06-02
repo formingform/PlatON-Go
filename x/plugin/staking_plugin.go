@@ -63,6 +63,10 @@ type StakingPlugin struct {
 	enableValidatorsHistory bool
 }
 
+func (stakingPlugin *StakingPlugin) GetStakingDB() *staking.StakingDB {
+	return stakingPlugin.db
+}
+
 var (
 	stakePlnOnce sync.Once
 	stk          *StakingPlugin
@@ -3358,6 +3362,10 @@ func (sk *StakingPlugin) getPreValIndex(blockHash common.Hash, blockNumber uint6
 	return targetIndex, nil
 }
 
+func (sk *StakingPlugin) GetCurrValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getCurrValList(blockHash, blockNumber, isCommit)
+}
+
 func (sk *StakingPlugin) getCurrValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
 
 	targetIndex, err := sk.getCurrValIndex(blockHash, blockNumber, isCommit)
@@ -3613,6 +3621,10 @@ func (sk *StakingPlugin) setRoundValListByIndex(blockNumber uint64, blockHash co
 	}
 
 	return nil
+}
+
+func (sk *StakingPlugin) GetVerifierArray(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getVerifierList(blockHash, blockNumber, isCommit)
 }
 
 func (sk *StakingPlugin) getVerifierList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {

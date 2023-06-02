@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package plugin
 
 import (
@@ -515,6 +514,9 @@ func (rp *RestrictingPlugin) mustGetRestrictingInfoByDecode(state xcom.StateDB, 
 		return restrictingKey, restrictInfo, common.InternalError.Wrap(err.Error())
 	}
 	return restrictingKey, restrictInfo, nil
+}
+func (rp *RestrictingPlugin) MustGetRestrictingInfoByDecode(state xcom.StateDB, account common.Address) ([]byte, restricting.RestrictingInfo, *common.BizError) {
+	return rp.mustGetRestrictingInfoByDecode(state, account)
 }
 
 func (rp *RestrictingPlugin) getReleaseAmount(state xcom.StateDB, epoch uint64, account common.Address) ([]byte, *big.Int) {
