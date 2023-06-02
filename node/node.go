@@ -367,6 +367,7 @@ func (n *Node) startRPC() error {
 		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
 		}
+		//启动 HTTP/ws RPC服务
 		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
 			return err
 		}
@@ -387,6 +388,7 @@ func (n *Node) startRPC() error {
 		}
 	}
 
+	//启动 HTTP/ws RPC服务
 	if err := n.http.start(); err != nil {
 		return err
 	}
@@ -453,6 +455,8 @@ func (n *Node) RegisterProtocols(protocols []p2p.Protocol) {
 }
 
 // RegisterAPIs registers the APIs a service provides on the node.
+// 向节点注册rpc接口。
+// 节点提供的rpc接口，除了通过这个接口注册的，还包括节点内置的一些rpc接口，参考:1. node/node.go:76 node/api.go:35
 func (n *Node) RegisterAPIs(apis []rpc.API) {
 	n.lock.Lock()
 	defer n.lock.Unlock()

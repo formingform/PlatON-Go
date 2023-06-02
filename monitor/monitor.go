@@ -2,8 +2,10 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/PlatONnetwork/PlatON-Go/core/state"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
+	"sync"
 )
 
 type MonitorDbKey int
@@ -15,6 +17,32 @@ const (
 	ProxyPatternKey
 	proxyPatternMapKey
 )
+
+type Monitor struct {
+	statedb   *state.StateDB
+	monitordb *monitorDB
+}
+
+var (
+	onceMonitor sync.Once
+	monitor     *Monitor
+)
+
+func InitMonitor(statedb *state.StateDB) {
+	onceMonitor.Do(func() {
+		if levelDB, err := openLevelDB(16, 500); err != nil {
+			log.Crit("init monitor db fail", "err", err)
+		} else {
+			dbInstance := &monitorDB{path: dbFullPath, levelDB: levelDB, closed: false}
+			monitor = &Monitor{statedb: statedb, monitordb: dbInstance}
+		}
+
+	})
+}
+
+func MonitorInstance() *Monitor {
+	return monitor
+}
 
 // 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
 func (dbKey MonitorDbKey) String() string {
@@ -33,11 +61,11 @@ type ProxyPattern struct {
 	Implementation *ContractInfo `json:"implementation,omitempty"`
 }
 
-func CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
+func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
 	log.Debug("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load embed transfers", "err", err)
 		return
@@ -56,17 +84,17 @@ func CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to commo
 
 	json := common.ToJson(embedTransferList)
 	if len(json) > 0 {
-		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save embed transfers success")
 	}
 
 }
 
-func GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
+func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
 	log.Debug("GetEmbedTransfer", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("failed to load embed transfers", "err", err)
 		return nil
@@ -81,11 +109,11 @@ type ContractRef interface {
 	Address() common.Address
 }
 
-func CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
+func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
 	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(common.ToJson(contractInfo)))
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load created contracts", "err", err)
 		return
@@ -97,17 +125,17 @@ func CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) 
 
 	json := common.ToJson(createdContractInfoList)
 	if len(json) > 0 {
-		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save created contracts success")
 	}
 
 }
 
-func GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load created contracts", "err", err)
 		return nil
@@ -119,9 +147,9 @@ func GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*Contr
 	return createdContractInfoList
 }
 
-func CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
+func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load suicided contracts", "err", err)
 		return
@@ -137,17 +165,17 @@ func CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common
 
 	json := common.ToJson(suicidedContractInfoList)
 	if len(json) > 0 {
-		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save suicided contracts success")
 	}
 
 }
 
-func GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load suicided contracts", "err", err)
 		return nil
@@ -160,9 +188,9 @@ func GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*Cont
 }
 
 // CollectProxyPattern 根据交易txHash发现代理关系
-func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
+func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return
@@ -174,14 +202,14 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 
 	json := common.ToJson(proxyPatternList)
 	if len(json) > 0 {
-		getMonitorDB().PutLevelDB([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save proxy patterns success")
 	}
 
 	// === to save the proxy map to local db
 
 	dbMapKey := proxyPatternMapKey.String()
-	data, err = getMonitorDB().GetLevelDB([]byte(dbMapKey))
+	data, err = m.monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy map", "err", err)
 		return
@@ -193,14 +221,14 @@ func CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationCo
 
 	json = common.ToJson(proxyPatternMap)
 	if len(json) > 0 {
-		getMonitorDB().PutLevelDB([]byte(dbMapKey), json)
+		m.monitordb.Put([]byte(dbMapKey), json)
 		log.Debug("save proxy map success")
 	}
 }
 
-func IsProxied(self, target common.Address) bool {
+func (m *Monitor) IsProxied(self, target common.Address) bool {
 	dbMapKey := proxyPatternMapKey.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbMapKey))
+	data, err := m.monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy map", "err", err)
 		return false
@@ -216,11 +244,11 @@ func IsProxied(self, target common.Address) bool {
 	return false
 }
 
-func GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
+func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
 	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err := getMonitorDB().GetLevelDB([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return nil

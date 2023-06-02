@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math/big"
 	"os"
 	"sync"
@@ -116,12 +117,12 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	}
 	snapshotdb.SetDBOptions(config.DatabaseCache, config.DatabaseHandles)
 
-	hDB, error := stack.OpenDatabase("historydata",config.DatabaseCache, config.DatabaseHandles, "eth/db/historydata/" )
+	hDB, error := stack.OpenDatabase("historydata", config.DatabaseCache, config.DatabaseHandles, "eth/db/historydata/")
 	if error != nil {
 		return nil, error
 	}
 	xplugin.STAKING_DB = &xplugin.StakingDB{
-		HistoryDB:  hDB,
+		HistoryDB: hDB,
 	}
 	snapshotBaseDB, err := snapshotdb.Open(stack.ResolvePath(snapshotdb.DBPath), config.DatabaseCache, config.DatabaseHandles, true)
 	if err != nil {
@@ -255,7 +256,7 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 			TrieCleanRejournal: config.TrieCleanCacheRejournal,
 			DBGCInterval:       config.DBGCInterval, DBGCTimeout: config.DBGCTimeout,
 			DBGCMpt: config.DBGCMpt, DBGCBlock: config.DBGCBlock,
-			DBDisabledCache:config.DBDisabledCache,DBCacheEpoch:config.DBCacheEpoch,
+			DBDisabledCache: config.DBDisabledCache, DBCacheEpoch: config.DBCacheEpoch,
 		}
 
 		minningConfig = &core.MiningConfig{MiningLogAtDepth: config.MiningLogAtDepth, TxChanSize: config.TxChanSize,
@@ -275,6 +276,13 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	snapshotdb.SetDBBlockChain(eth.blockchain)
 
 	blockChainCache := core.NewBlockChainCache(eth.blockchain)
+
+	// set StateDB to monitor
+	stateDB, err := eth.BlockChain().State()
+	if err != nil {
+		return nil, err
+	}
+	monitor.InitMonitor(stateDB)
 
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
@@ -409,11 +417,18 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, no
 
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
+// 定义节点提供的rpc服务（除了节点内置的rpc服务），有3个部分组成：
+// 1. ethapi.GetAPIs(s.APIBackend)
+// 2. 共识提供的rpc接口：s.engine.APIs(s.BlockChain())
+// 3. local APIs
 func (s *Ethereum) APIs() []rpc.API {
 	apis := ethapi.GetAPIs(s.APIBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	// Append any APIs exposed by monitor
+	apis = append(apis, monitor.MonitorInstance().APIs()...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{

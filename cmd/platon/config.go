@@ -182,8 +182,8 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 
 	snapshotdb.SetDBPathWithNode(stack.ResolvePath(snapshotdb.DBPath))
-	//init monitor db
-	monitor.SetDBPath(stack.ResolvePath(monitor.DBPath))
+	//init monitor db path
+	monitor.SetDbFullPath(stack.ResolvePath(monitor.DBPath))
 
 	backend := utils.RegisterEthService(stack, &cfg.Eth)
 

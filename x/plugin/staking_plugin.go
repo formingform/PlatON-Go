@@ -1719,7 +1719,7 @@ func (sk *StakingPlugin) GetVerifierList(blockHash common.Hash, blockNumber uint
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryVerifierList(blockHash common.Hash, blockNumber uint64, isCommit bool) (staking.ValidatorExQueue, error) {
+func (sk *StakingPlugin) GetHistoryVerifierList(blockNumber uint64) (staking.ValidatorExQueue, error) {
 
 	i := uint64(0)
 	if blockNumber != i {
@@ -1784,7 +1784,7 @@ func (sk *StakingPlugin) GetHistoryVerifierList(blockHash common.Hash, blockNumb
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetSlashData(blockHash common.Hash, blockNumber uint64) (staking.SlashNodeQueue, error) {
+func (sk *StakingPlugin) GetSlashData(blockNumber uint64) (staking.SlashNodeQueue, error) {
 	numStr := strconv.FormatUint(blockNumber, 10)
 	log.Debug("wow,GetSlashData query number:", "num string", numStr)
 	data, err := STAKING_DB.HistoryDB.Get([]byte(SlashName + numStr))
@@ -1807,7 +1807,7 @@ func (sk *StakingPlugin) GetSlashData(blockHash common.Hash, blockNumber uint64)
 	return snq, nil
 }
 
-func (sk *StakingPlugin) GetTransData(blockHash common.Hash, blockNumber uint64) (staking.TransBlockReturnQueue, error) {
+func (sk *StakingPlugin) GetTransData(blockNumber uint64) (staking.TransBlockReturnQueue, error) {
 	numStr := strconv.FormatUint(blockNumber, 10)
 	log.Debug("wow,GetTransData query number:", "num string", numStr)
 	blockKey := TransBlockName + numStr
@@ -2006,7 +2006,7 @@ func (sk *StakingPlugin) GetValidatorList(blockHash common.Hash, blockNumber uin
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryValidatorList(blockHash common.Hash, blockNumber uint64, flag uint, isCommit bool) (
+func (sk *StakingPlugin) GetHistoryValidatorList(blockNumber uint64) (
 	staking.ValidatorExQueue, error) {
 
 	i := uint64(0)
@@ -2066,7 +2066,7 @@ func (sk *StakingPlugin) GetHistoryValidatorList(blockHash common.Hash, blockNum
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryReward(blockHash common.Hash, blockNumber uint64) (
+func (sk *StakingPlugin) GetHistoryReward(blockNumber uint64) (
 	staking.RewardReturn, error) {
 
 	i := uint64(0)
@@ -2131,7 +2131,7 @@ func (sk *StakingPlugin) GetHistoryReward(blockHash common.Hash, blockNumber uin
 	return rewardReturn, nil
 }
 
-func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash, blockNumber uint64) (staking.CandidateVersionQueue, error) {
+func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
 
 	iter := sk.db.IteratorCandidatePowerByBlockHash(blockHash, 0)
 	if err := iter.Error(); nil != err {

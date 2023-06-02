@@ -806,7 +806,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	// caller means the sender of the raw transaction, but not the proxy contract address.
 	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
 	if !interpreter.evm.vmConfig.ProxyInspected {
-		if !monitor.IsProxied(callContext.contract.self.Address(), toAddr) {
+		if !monitor.MonitorInstance().IsProxied(callContext.contract.self.Address(), toAddr) {
 			selfInfo := monitor.NewContractInfo(callContext.contract.self.Address(), interpreter.evm.StateDB.GetCode(callContext.contract.self.Address()))
 			targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
 			log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
@@ -815,7 +815,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 			//---
 			if isProxyPattern == true {
 				log.Debug("proxy pattern found")
-				monitor.CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
+				monitor.MonitorInstance().CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
 			} else {
 				log.Debug("proxy pattern not found")
 			}
@@ -878,13 +878,13 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 
 	//stats: 把销毁的合约记录下来
 	log.Debug("processing contract suicide", "address", callContext.contract.Address())
-	monitor.CollectSuicidedContractInfo(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
+	monitor.MonitorInstance().CollectSuicidedContractInfo(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
 	//saveContractSuicided(interpreter, callContext.contract.Address())
 
 	//stats: 收集隐含交易
 	if balance.Sign() > 0 {
 		log.Info("collect embed transfer in opSuicide()", "blockNumber", interpreter.evm.Context.BlockNumber.Uint64(), "txHash", interpreter.evm.StateDB.TxHash(), "caller", callContext.contract.Address().Bech32(), "to", common.Address(beneficiary.Bytes20()).Bech32(), "&value", &balance)
-		monitor.CollectEmbedTransfer(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.Address(), common.Address(beneficiary.Bytes20()), balance)
+		monitor.MonitorInstance().CollectEmbedTransfer(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.Address(), common.Address(beneficiary.Bytes20()), balance)
 	}
 
 	return nil, nil

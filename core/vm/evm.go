@@ -363,7 +363,7 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 			//前面检查是否可以转账时，只要value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value)
 			//那说明value也可能是负数
 			log.Info("collect embed transfer tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", to.Address().Bech32(), "amount", value, "&value", &value)
-			monitor.CollectEmbedTransfer(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
+			monitor.MonitorInstance().CollectEmbedTransfer(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
 		}
 	}
 	return ret, contract.Gas, err
@@ -606,7 +606,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			// stats: 收集新建的合约，不管是to为空时部署的合约，还是合约操作码opCreate/opCreate2都会走到这里
 			contractInfo := monitor.NewContractInfo(address, contract.Code)
 			log.Debug("new contract deployed in vm.create()", "contractInfo", string(common.ToJson(contractInfo)))
-			monitor.CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
+			monitor.MonitorInstance().CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}

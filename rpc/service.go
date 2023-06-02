@@ -63,6 +63,7 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 	if name == "" {
 		return fmt.Errorf("no service name for type %s", rcvrVal.Type().String())
 	}
+	// 把指定的一个接口声明中的所有接口方法都构造成callback
 	callbacks := suitableCallbacks(rcvrVal)
 	if len(callbacks) == 0 {
 		return fmt.Errorf("service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
@@ -73,6 +74,9 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 	if r.services == nil {
 		r.services = make(map[string]service)
 	}
+
+	//services的key=rpc模块名，value=所有接口方法构造的callback
+	//所以在写注册rpc接口时，模块名可以重复，只要相同模块名称下，接口方法名不同即可
 	svc, ok := r.services[name]
 	if !ok {
 		svc = service{
@@ -86,6 +90,7 @@ func (r *serviceRegistry) registerName(name string, rcvr interface{}) error {
 		if cb.isSubscribe {
 			svc.subscriptions[name] = cb
 		} else {
+			//callbacks也是个map，key=接口方法名，value=接口方法构造的callback
 			svc.callbacks[name] = cb
 		}
 	}
