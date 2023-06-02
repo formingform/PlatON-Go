@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/console/prompt"
-	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"io"
 	"path/filepath"
 
@@ -180,7 +179,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	//init monitor db
-	monitor.SetDBPath(stack.ResolvePath(monitor.DBPath))
+	//monitor.SetDbFullPath(stack.ResolvePath(monitor.DBPath))
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "")

@@ -473,6 +473,8 @@ func (is *ipcServer) stop() error {
 
 // RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
 // and then registers all of the APIs exposed by the services.
+// apis 系统提供的api接口
+// modules 命令行指定的api modules
 func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
 	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)

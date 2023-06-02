@@ -428,11 +428,13 @@ func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) e
 	}
 
 	if xutil.IsEndOfEpoch(block.NumberU64()) {
+		// epoch结束块高，保存验证人信息
 		err := sk.SetVerifier(block, numStr)
 		if nil != err {
 			log.Error("Failed to SetVerifier on stakingPlugin Confirmed When Settletmetn block", "err", err)
 			return err
 		}
+		// epoch结束块高，保存验证出块奖励信息
 		err = sk.SetReward(block, numStr)
 		if nil != err {
 			log.Error("Failed to SetReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
@@ -1719,7 +1721,7 @@ func (sk *StakingPlugin) GetVerifierList(blockHash common.Hash, blockNumber uint
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryVerifierList(blockHash common.Hash, blockNumber uint64, isCommit bool) (staking.ValidatorExQueue, error) {
+func (sk2 *StakingPlugin) GetHistoryVerifierList(blockNumber uint64) (staking.ValidatorExQueue, error) {
 
 	i := uint64(0)
 	if blockNumber != i {
@@ -1784,7 +1786,7 @@ func (sk *StakingPlugin) GetHistoryVerifierList(blockHash common.Hash, blockNumb
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetSlashData(blockHash common.Hash, blockNumber uint64) (staking.SlashNodeQueue, error) {
+func (sk *StakingPlugin) GetSlashData(blockNumber uint64) (staking.SlashNodeQueue, error) {
 	numStr := strconv.FormatUint(blockNumber, 10)
 	log.Debug("wow,GetSlashData query number:", "num string", numStr)
 	data, err := STAKING_DB.HistoryDB.Get([]byte(SlashName + numStr))
@@ -1807,7 +1809,7 @@ func (sk *StakingPlugin) GetSlashData(blockHash common.Hash, blockNumber uint64)
 	return snq, nil
 }
 
-func (sk *StakingPlugin) GetTransData(blockHash common.Hash, blockNumber uint64) (staking.TransBlockReturnQueue, error) {
+func (sk *StakingPlugin) GetTransData(blockNumber uint64) (staking.TransBlockReturnQueue, error) {
 	numStr := strconv.FormatUint(blockNumber, 10)
 	log.Debug("wow,GetTransData query number:", "num string", numStr)
 	blockKey := TransBlockName + numStr
@@ -2006,7 +2008,7 @@ func (sk *StakingPlugin) GetValidatorList(blockHash common.Hash, blockNumber uin
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryValidatorList(blockHash common.Hash, blockNumber uint64, flag uint, isCommit bool) (
+func (sk *StakingPlugin) GetHistoryValidatorList(blockNumber uint64) (
 	staking.ValidatorExQueue, error) {
 
 	i := uint64(0)
@@ -2066,7 +2068,7 @@ func (sk *StakingPlugin) GetHistoryValidatorList(blockHash common.Hash, blockNum
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryReward(blockHash common.Hash, blockNumber uint64) (
+func (sk *StakingPlugin) GetHistoryReward(blockNumber uint64) (
 	staking.RewardReturn, error) {
 
 	i := uint64(0)
@@ -2131,7 +2133,7 @@ func (sk *StakingPlugin) GetHistoryReward(blockHash common.Hash, blockNumber uin
 	return rewardReturn, nil
 }
 
-func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash, blockNumber uint64) (staking.CandidateVersionQueue, error) {
+func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
 
 	iter := sk.db.IteratorCandidatePowerByBlockHash(blockHash, 0)
 	if err := iter.Error(); nil != err {
@@ -3714,7 +3716,9 @@ func (sk *StakingPlugin) getPreValIndex(blockHash common.Hash, blockNumber uint6
 	}
 	return targetIndex, nil
 }
-
+func (sk *StakingPlugin) GetCurrValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getCurrValList(blockHash, blockNumber, isCommit)
+}
 func (sk *StakingPlugin) getCurrValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
 
 	targetIndex, err := sk.getCurrValIndex(blockHash, blockNumber, isCommit)

@@ -53,12 +53,14 @@ func StartHTTPEndpoint(endpoint string, timeouts rpc.HTTPTimeouts, handler http.
 // the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
 func checkModuleAvailability(modules []string, apis []rpc.API) (bad, available []string) {
 	availableSet := make(map[string]struct{})
+	//把系统的api的modules理出来
 	for _, api := range apis {
 		if _, ok := availableSet[api.Namespace]; !ok {
 			availableSet[api.Namespace] = struct{}{}
 			available = append(available, api.Namespace)
 		}
 	}
+	//把命令行中指定的modules检查下，把命令行指定了，但是系统中没有的module找出来。
 	for _, name := range modules {
 		if _, ok := availableSet[name]; !ok && name != rpc.MetadataApi {
 			bad = append(bad, name)

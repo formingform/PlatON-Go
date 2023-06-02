@@ -3,6 +3,7 @@ package monitor
 import (
 	"errors"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/core"
 	"sync"
 
 	leveldbError "github.com/syndtr/goleveldb/leveldb/errors"
@@ -18,29 +19,44 @@ const (
 )
 
 var (
-	dbpath string
-
-	dbInstance *MonitorDB
-
-	instance sync.Mutex
-
-	levelDBcache   = int(16)
-	levelDBhandles = int(500)
-
-	logger = log.Root().New("package", "statsdb")
-
+	once       sync.Once
+	dbFullPath string
+	dbInstance *monitorDB
+	blockchain *core.BlockChain
 	//ErrNotFound when db not found
-	ErrNotFound = errors.New("statsDB: not found")
+	ErrNotFound = errors.New("monitorDB: not found")
 )
 
-type MonitorDB struct {
-	path    string
-	levelDB *leveldb.DB
-	closed  bool
-	dbError error
+type monitorDB struct {
+	path       string
+	levelDB    *leveldb.DB
+	closed     bool
+	blockchain *core.BlockChain
 }
 
-func (db *MonitorDB) PutLevelDB(key, value []byte) error {
+func SetDbFullPath(fullPath string) {
+	dbFullPath = fullPath
+	log.Info("set monitor db", "path", dbFullPath)
+}
+
+func SetBlockChain(c *core.BlockChain) {
+	blockchain = c
+	log.Info("set blockchain")
+}
+
+// monitorDBInstance returns the instance of monitorDB. REMEMBER: call SetDbFullPath() and SetBlockChain() first.
+func monitorDBInstance() *monitorDB {
+	once.Do(func() {
+		if levelDB, err := openLevelDB(16, 500); err != nil {
+			log.Crit("init monitor db fail", "err", err)
+		} else {
+			dbInstance = &monitorDB{path: dbFullPath, levelDB: levelDB, blockchain: blockchain, closed: false}
+		}
+	})
+	return dbInstance
+}
+
+func (db *monitorDB) Put(key, value []byte) error {
 	err := db.levelDB.Put(key, value, nil)
 	if err != nil {
 		log.Crit("Failed write to level db", "error", err)
@@ -49,7 +65,7 @@ func (db *MonitorDB) PutLevelDB(key, value []byte) error {
 	return nil
 }
 
-func (db *MonitorDB) DeleteLevelDB(key []byte) error {
+func (db *monitorDB) Delete(key []byte) error {
 	err := db.levelDB.Delete(key, nil)
 	if err != nil {
 		log.Crit("Failed delete from level db", "error", err)
@@ -58,7 +74,7 @@ func (db *MonitorDB) DeleteLevelDB(key []byte) error {
 	return nil
 }
 
-func (db *MonitorDB) GetLevelDB(key []byte) ([]byte, error) {
+func (db *monitorDB) Get(key []byte) ([]byte, error) {
 	if v, err := db.levelDB.Get(key, nil); err == nil {
 		return v, nil
 	} else if err != leveldb.ErrNotFound {
@@ -69,8 +85,8 @@ func (db *MonitorDB) GetLevelDB(key []byte) ([]byte, error) {
 	}
 }
 
-func (db *MonitorDB) HasLevelDB(key []byte) (bool, error) {
-	_, err := db.GetLevelDB(key)
+func (db *monitorDB) Has(key []byte) (bool, error) {
+	_, err := db.Get(key)
 	if err == nil {
 		return true, nil
 	} else if err == ErrNotFound {
@@ -80,7 +96,7 @@ func (db *MonitorDB) HasLevelDB(key []byte) (bool, error) {
 	}
 }
 
-func (db *MonitorDB) Close() error {
+func (db *monitorDB) Close() error {
 	if db.levelDB != nil {
 		if err := db.levelDB.Close(); err != nil {
 			return fmt.Errorf("[statsDB]close level db fail:%v", err)
@@ -90,36 +106,8 @@ func (db *MonitorDB) Close() error {
 	return nil
 }
 
-func SetDBPath(path string) {
-	dbpath = path
-	logger.Info("set monitor db", "path", dbpath)
-}
-
-func SetDBOptions(cache int, handles int) {
-	levelDBcache = cache
-	levelDBhandles = handles
-}
-
-func getMonitorDB() *MonitorDB {
-	instance.Lock()
-	defer instance.Unlock()
-	if dbInstance == nil || dbInstance.closed {
-		logger.Debug("monitor dbInstance is nil", "path", dbpath)
-		if dbInstance == nil {
-			dbInstance = new(MonitorDB)
-		}
-		if levelDB, err := openLevelDB(levelDBcache, levelDBhandles); err != nil {
-			logger.Error("init monitor db fail", "err", err)
-			panic(err)
-		} else {
-			dbInstance.levelDB = levelDB
-		}
-	}
-	return dbInstance
-}
-
 func openLevelDB(cache int, handles int) (*leveldb.DB, error) {
-	db, err := leveldb.OpenFile(dbpath, &opt.Options{
+	db, err := leveldb.OpenFile(dbFullPath, &opt.Options{
 		OpenFilesCacheCapacity: handles,
 		BlockCacheCapacity:     cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
@@ -127,7 +115,7 @@ func openLevelDB(cache int, handles int) (*leveldb.DB, error) {
 	})
 	if err != nil {
 		if _, corrupted := err.(*leveldbError.ErrCorrupted); corrupted {
-			db, err = leveldb.RecoverFile(dbpath, nil)
+			db, err = leveldb.RecoverFile(dbFullPath, nil)
 			if err != nil {
 				return nil, fmt.Errorf("[MonitorDB.recover]RecoverFile levelDB fail:%v", err)
 			}
