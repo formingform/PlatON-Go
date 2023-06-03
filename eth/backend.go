@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PlatONnetwork/AppChain-Go/manager"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"math/big"
 	"os"
 	"sync"
@@ -267,6 +268,13 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	snapshotdb.SetDBBlockChain(eth.blockchain)
+
+	//set block chain to monitor
+	stateDB, err := eth.BlockChain().State()
+	if err != nil {
+		return nil, err
+	}
+	monitor.InitMonitor(stateDB)
 
 	blockChainCache := core.NewBlockChainCache(eth.blockchain)
 

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"io"
 	"os"
 	"reflect"
@@ -181,6 +182,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 
 	snapshotdb.SetDBPathWithNode(stack.ResolvePath(snapshotdb.DBPath))
+
+	//init monitor db path
+	monitor.SetDbFullPath(stack.ResolvePath(monitor.DBPath))
 
 	backend := utils.RegisterEthService(stack, &cfg.Eth)
 

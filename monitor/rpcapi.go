@@ -58,7 +58,7 @@ func (m *Monitor) GetHistoryVerifierList(blockNumber *big.Int) (staking.Validato
 	queryNumber := i * xutil.CalcBlocksEachEpoch()
 	numStr := strconv.FormatUint(queryNumber, 10)
 	log.Debug("wow,GetHistoryVerifierList query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(VerifierName + numStr))
+	data, err := m.monitordb.Get([]byte(VerifierKey.String() + numStr))
 	if nil != err {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (m *Monitor) GetHistoryVerifierList(blockNumber *big.Int) (staking.Validato
 	var candidateHexQueue staking.CandidateHexQueue
 
 	if queryNumber == 0 {
-		data, err := STAKING_DB.HistoryDB.Get([]byte(InitNodeName + numStr))
+		data, err := m.monitordb.Get([]byte(InitNodeKey.String() + numStr))
 		if nil != err {
 			return nil, err
 		}
@@ -121,7 +121,7 @@ func (m *Monitor) GetHistoryValidatorList(blockNumber *big.Int) (staking.Validat
 	queryNumber := i * xutil.ConsensusSize()
 	numStr := strconv.FormatUint(queryNumber, 10)
 	log.Debug("wow,GetHistoryValidatorList query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(ValidatorName + numStr))
+	data, err := m.monitordb.Get([]byte(ValidatorKey.String() + numStr))
 	if nil != err {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (m *Monitor) GetHistoryValidatorList(blockNumber *big.Int) (staking.Validat
 	var candidateHexQueue staking.CandidateHexQueue
 
 	if queryNumber == 0 {
-		data, err := STAKING_DB.HistoryDB.Get([]byte(InitNodeName + numStr))
+		data, err := m.monitordb.Get([]byte(InitNodeKey.String() + numStr))
 		if nil != err {
 			return nil, err
 		}
@@ -180,7 +180,7 @@ func (m *Monitor) GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, 
 	queryNumber := i * xutil.CalcBlocksEachEpoch()
 	numStr := strconv.FormatUint(queryNumber, 10)
 	log.Debug("wow,GetHistoryReward query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(RewardName + numStr))
+	data, err := m.monitordb.Get([]byte(RewardKey.String() + numStr))
 	var reward staking.Reward
 	var rewardReturn staking.RewardReturn
 	if nil != err {
@@ -199,7 +199,7 @@ func (m *Monitor) GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, 
 	if i > 0 {
 		numStr := strconv.FormatUint(queryNumber-xutil.CalcBlocksEachEpoch(), 10)
 		log.Debug("wow,GetCurHistoryReward query number:", "num string", numStr)
-		data, err := STAKING_DB.HistoryDB.Get([]byte(RewardName + numStr))
+		data, err := m.monitordb.Get([]byte(RewardKey.String() + numStr))
 		var curReward staking.Reward
 		if nil != err {
 			return rewardReturn, err
@@ -237,7 +237,7 @@ func (m *Monitor) GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, 
 func (m *Monitor) GetHistoryLowRateSlashList(blockNumber *big.Int) (staking.SlashNodeQueue, error) {
 	numStr := strconv.FormatUint(blockNumber.Uint64(), 10)
 	log.Debug("wow,GetSlashData query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(SlashName + numStr))
+	data, err := m.monitordb.Get([]byte(SlashKey.String() + numStr))
 	if nil != err {
 		return nil, err
 	}
@@ -383,10 +383,10 @@ func (m *Monitor) GetProposalParticipants(proposalID, blockHash common.Hash) (ac
 func (m *Monitor) GetPPosInvokeInfo(blockNumber *big.Int) (staking.TransBlockReturnQueue, error) {
 	numStr := strconv.FormatUint(blockNumber.Uint64(), 10)
 	log.Debug("wow,GetTransData query number:", "num string", numStr)
-	blockKey := TransBlockName + numStr
-	transKey := TransHashName + numStr
+	blockKey := TransBlockKey.String() + numStr
+	transKey := TransHashKey.String() + numStr
 
-	blockData, err := STAKING_DB.HistoryDB.Get([]byte(blockKey))
+	blockData, err := m.monitordb.Get([]byte(blockKey))
 	if nil != err {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (m *Monitor) GetPPosInvokeInfo(blockNumber *big.Int) (staking.TransBlockRet
 
 	for i, v := range transBlock.TransHashStr {
 
-		transInputBytes, err := STAKING_DB.HistoryDB.Get([]byte(transKey + v))
+		transInputBytes, err := m.monitordb.Get([]byte(transKey + v))
 		if nil != err {
 			log.Error("get transData error", err)
 			continue

@@ -6,10 +6,12 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
 	"github.com/PlatONnetwork/AppChain-Go/log"
 	"github.com/PlatONnetwork/AppChain-Go/p2p/discover"
+	"github.com/PlatONnetwork/AppChain-Go/rlp"
 	"github.com/PlatONnetwork/AppChain-Go/x/plugin"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
 	"github.com/PlatONnetwork/AppChain-Go/x/xcom"
 	"github.com/PlatONnetwork/AppChain-Go/x/xutil"
+	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -324,7 +326,7 @@ func (m *Monitor) SetReward(block *types.Block, numStr string) error {
 			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
 			return err
 		}
-		STAKING_DB.HistoryDB.Put([]byte(YearName+"1"), numberStart)
+		m.monitordb.Put([]byte(YearKey.String()+"1"), numberStart)
 	} else {
 		incIssuanceTime, err := xcom.LoadIncIssuanceTime(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
 		if nil != err {
@@ -345,9 +347,9 @@ func (m *Monitor) SetReward(block *types.Block, numStr string) error {
 		epochBlocks := xutil.CalcBlocksEachEpoch()
 		remainTime := incIssuanceTime - int64(block.Header().Time)
 		remainEpoch := 1
-		remainBlocks := math2.Ceil(float64(remainTime) / float64(avgPackTime))
+		remainBlocks := math.Ceil(float64(remainTime) / float64(avgPackTime))
 		if remainBlocks > float64(epochBlocks) {
-			remainEpoch = int(math2.Ceil(remainBlocks / float64(epochBlocks)))
+			remainEpoch = int(math.Ceil(remainBlocks / float64(epochBlocks)))
 		}
 		//get the num of year
 		blocks := block.Number().Uint64() + uint64(remainEpoch)*epochBlocks
@@ -358,18 +360,18 @@ func (m *Monitor) SetReward(block *types.Block, numStr string) error {
 				log.Error("mygod,Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
 				return err
 			}
-			STAKING_DB.HistoryDB.Put([]byte(YearName+yearTemp), numberStart)
+			m.monitordb.Put([]byte(YearKey.String()+yearTemp), numberStart)
 			log.Debug("set yearNum", "yearTemp", yearTemp, "number", block.Number())
 		}
 		if number == blocks {
 			yearTemp := strconv.FormatUint(uint64(yearNum+1), 10)
-			data, err := STAKING_DB.HistoryDB.Get([]byte(YearName + yearTemp))
+			data, err := m.monitordb.Get([]byte(YearKey.String() + yearTemp))
 			if nil != err {
-				log.Error("mygod,get YearName error", "key", YearName+yearTemp, "err", err)
+				log.Error("mygod,get YearName error", "key", YearKey.String()+yearTemp, "err", err)
 			}
 			err = rlp.DecodeBytes(data, &number)
 			if nil != err {
-				log.Error("mygod,DecodeBytes YearName error", "key", YearName+yearTemp, "err", err)
+				log.Error("mygod,DecodeBytes YearName error", "key", YearKey.String()+yearTemp, "err", err)
 			}
 		}
 		log.Debug("LoadNewBlockReward and LoadStakingReward", "packageReward", packageReward, "stakingReward", stakingReward, "hash", block.Hash(), "block number", block.Number(),
@@ -390,7 +392,7 @@ func (m *Monitor) SetReward(block *types.Block, numStr string) error {
 		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
 		return err
 	}
-	STAKING_DB.HistoryDB.Put([]byte(RewardName+numStr), dataReward)
+	m.monitordb.Put([]byte(RewardKey.String()+numStr), dataReward)
 	log.Debug("wow,insert rewardName history :", dataReward)
 	return nil
 }
@@ -426,8 +428,8 @@ func (m *Monitor) SetValidator(block *types.Block, numStr string, nodeId discove
 		return isCurr, currMap, err
 	}
 
-	STAKING_DB.HistoryDB.Put([]byte(ValidatorName+numStr), data)
-	log.Debug("wow,insert validator history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", ValidatorName+numStr)
+	m.monitordb.Put([]byte(ValidatorKey.String()+numStr), data)
+	log.Debug("wow,insert validator history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", ValidatorKey.String()+numStr)
 	log.Debug("wow,insert validator history", "currentValidatorArray", currentValidatorArray)
 	return isCurr, currMap, nil
 }
@@ -489,8 +491,8 @@ func (m *Monitor) SetVerifier(block *types.Block, numStr string) error {
 		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
 		return err
 	}
-	STAKING_DB.HistoryDB.Put([]byte(VerifierName+numStr), data)
-	log.Debug("wow,insert verifier history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", VerifierName+numStr)
+	m.monitordb.Put([]byte(VerifierKey.String()+numStr), data)
+	log.Debug("wow,insert verifier history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", VerifierKey.String()+numStr)
 	log.Debug("wow,insert verifier history :", currentValidatorArray)
 
 	if numStr == "0" {
@@ -499,7 +501,7 @@ func (m *Monitor) SetVerifier(block *types.Block, numStr string) error {
 			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
 			return err
 		}
-		STAKING_DB.HistoryDB.Put([]byte(InitNodeName+"0"), dataCandidate)
+		m.monitordb.Put([]byte(InitNodeKey.String()+"0"), dataCandidate)
 		log.Debug("wow,insert candidate  0:", currentCandidate)
 	}
 	return nil
