@@ -342,25 +342,26 @@ func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, s
 func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) error {
 	//当区块=1时，要把当前的（内置）的共识节点保存到本地db以备后续查询
 	if block.NumberU64() == uint64(1) {
-		current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
-		if nil != err {
-			log.Error("Failed to Query Next validators on stakingPlugin Confirmed When Election block",
-				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
-			return err
-		}
-		monitor.MonitorInstance().CollectValidators(block.Hash(), block.NumberU64(), current)
+		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+		monitor.MonitorInstance().CollectNextEpochVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+	}
+	if xutil.IsEndOfEpoch(block.NumberU64()) {
+		//当eoch结束时，要把先前20个区块选出的下一轮共识节点，保存到本地db以备后续查询
+		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+
+		//当是end of epoch时，保存201名单
+		monitor.MonitorInstance().CollectNextEpochVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 	}
 
 	if xutil.IsElection(block.NumberU64()) {
+		// 新的名单选出后，直接以[startBlock, endBlock]为区间的key，存储在snapshot db中。
+		// 不需要有切换验证人的动作，只需要根据块高去查询，即可以获取某个块高对应的验证人节点列表
 		next, err := sk.getNextValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
 			log.Error("Failed to Query Next validators on stakingPlugin Confirmed When Election block",
 				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
 			return err
 		}
-		//当区块=选举块时，要把选出的下一轮共识节点保存到本地db以备后续查询
-		monitor.MonitorInstance().CollectValidators(block.Hash(), block.NumberU64(), next)
-
 		current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
 			log.Error("Failed to Query Current Round validators on stakingPlugin Confirmed When Election block",
@@ -403,7 +404,6 @@ func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) e
 			return nil
 		}
 	}
-
 	return nil
 }
 
@@ -1920,9 +1920,7 @@ func (sk *StakingPlugin) IsCurrValidator(blockHash common.Hash, blockNumber uint
 }
 
 func (sk *StakingPlugin) GetCandidateList(blockHash common.Hash, blockNumber uint64) (staking.CandidateHexQueue, error) {
-
 	epoch := xutil.CalculateEpoch(blockNumber)
-
 	iter := sk.db.IteratorCandidatePowerByBlockHash(blockHash, 0)
 	if err := iter.Error(); nil != err {
 		return nil, err
@@ -3464,6 +3462,9 @@ func (sk *StakingPlugin) getCurrValIndex(blockHash common.Hash, blockNumber uint
 	return targetIndex, nil
 }
 
+func (sk *StakingPlugin) GetNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getNextValList(blockHash, blockNumber, isCommit)
+}
 func (sk *StakingPlugin) getNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
 
 	targetIndex, err := sk.getNextValIndex(blockHash, blockNumber, isCommit)

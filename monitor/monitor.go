@@ -20,8 +20,8 @@ const (
 	SuicidedContractKey
 	ProxyPatternKey
 	proxyPatternMapKey
-	ValidatorKey
-	VerifierKey
+	ValidatorsOfEpochKey
+	VerifiersOfEpochKey
 	EpochInfoKey
 	SlashKey
 	ImplicitPPOSTxKey
@@ -35,8 +35,8 @@ func (dbKey MonitorDbKey) String() string {
 		"SuicidedContractKey",
 		"ProxyPatternKey",
 		"proxyPatternMapKey",
-		"ValidatorKey",
-		"VerifierKey",
+		"ValidatorsOfEpochKey",
+		"VerifiersOfEpochKey",
 		"EpochInfoKey",
 		"YearKey",
 		"InitNodeKey",
@@ -80,6 +80,9 @@ func (m *Monitor) SetRestrictingPlugin(pluginImpl Intf_restrictingPlugin) {
 	monitor.restrictingPlugin = pluginImpl
 }
 
+// 收集非常规的转账交易
+// 1. 用户发起的合约调用，参数携带了value值，造成向合约地址转账
+// 2. 合约销毁时，合约上的原生代币，将转给合约的受益人（beneficiary，这个受益人，究竟是合约调用人？合约部署人？）
 func (m *Monitor) CollectUnusualTransferTx(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
 	log.Debug("CollectUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
@@ -109,6 +112,7 @@ func (m *Monitor) CollectUnusualTransferTx(blockNumber uint64, txHash common.Has
 
 }
 
+// 查询非常规的转账交易
 func (m *Monitor) GetUnusualTransferTx(blockNumber uint64, txHash common.Hash) []*UnusualTransferTx {
 	log.Debug("GetUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
@@ -124,6 +128,8 @@ func (m *Monitor) GetUnusualTransferTx(blockNumber uint64, txHash common.Hash) [
 	return unusualTransferTxList
 }
 
+// 收集某个交易产生的新合约信息
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易产生的新合约信息
 func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
 	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(ToJson(contractInfo)))
 
@@ -143,11 +149,12 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save created contracts success")
 	}
-
 }
 
-func (m *Monitor) GetCreatedContracts(blockNumber uint64, txHash common.Hash) []*ContractInfo {
-	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
+// 查询某个交易产生的新合约信息
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易产生的新合约信息
+func (m *Monitor) GetCreatedContracts(txHash common.Hash) []*ContractInfo {
+	log.Debug("GetCreatedContract", "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -162,6 +169,8 @@ func (m *Monitor) GetCreatedContracts(blockNumber uint64, txHash common.Hash) []
 	return createdContractInfoList
 }
 
+// 收集某个交易造成的自杀合约的信息
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易造成的自杀合约的信息
 func (m *Monitor) CollectSuicidedContract(txHash common.Hash, suicidedContractAddr common.Address) {
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -183,9 +192,10 @@ func (m *Monitor) CollectSuicidedContract(txHash common.Hash, suicidedContractAd
 		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save suicided contracts success")
 	}
-
 }
 
+// 查询某个交易产生的自杀合约的信息
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易造成的自杀合约的信息
 func (m *Monitor) GetSuicidedContracts(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
@@ -202,7 +212,8 @@ func (m *Monitor) GetSuicidedContracts(blockNumber uint64, txHash common.Hash) [
 	return suicidedContractInfoList
 }
 
-// CollectProxyPattern 根据交易txHash发现代理关系
+// CollectProxyPattern 收集某个交易上发现的代理关系
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易发现的代理关系
 func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -259,6 +270,8 @@ func (m *Monitor) IsProxied(self, target common.Address) bool {
 	return false
 }
 
+// GetProxyPatterns 查询某个交易上发现的代理关系
+// scan可以通过Rpc接口：GetExtReceipts，获取每个交易发现的代理关系
 func (m *Monitor) GetProxyPatterns(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
 	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
@@ -275,7 +288,8 @@ func (m *Monitor) GetProxyPatterns(blockNumber uint64, txHash common.Hash) []*Pr
 	return proxyPatternList
 }
 
-func (m *Monitor) CollectionEpochInfo(epoch uint64, newBlockReward, epochTotalStakingReward *big.Int, chainAge uint32, yearStartBlockNumber uint64, remainEpochThisYear uint32, avgPackTime uint64) {
+// epoch切换时，收集下一个epoch的相关信息
+func (m *Monitor) CollectionNextEpochInfo(epoch uint64, newBlockReward, epochTotalStakingReward *big.Int, chainAge uint32, yearStartBlockNumber uint64, remainEpochThisYear uint32, avgPackTime uint64) {
 	view := EpochView{
 		PackageReward:     newBlockReward,
 		StakingReward:     epochTotalStakingReward,
@@ -288,20 +302,26 @@ func (m *Monitor) CollectionEpochInfo(epoch uint64, newBlockReward, epochTotalSt
 	json := ToJson(view)
 	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch, 10)
 	m.monitordb.Put([]byte(dbKey), json)
-	log.Debug("CollectionEpochInfo", "data", string(json))
+	log.Debug("CollectionNextEpochInfo", "data", string(json))
 }
 
-// 保存25名单(包含详细信息）
-// epoch轮数从1开始，key的组成是：ValidatorKey+每个epoch轮的开始块高
-func (m *Monitor) CollectValidators(blockHash common.Hash, blockNumber uint64, validators *staking.ValidatorArray) {
+// CollectNextEpochValidators 在上个epoch的结束块高上，收集新的validator名单（25名单，包含详细信息）
+// epoch轮数从1开始，key的组成是：ValidatorsOfEpochKey+每个epoch轮的开始块高
+func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
+	nextValidators, err := m.stakingPlugin.GetNextValList(blockHash, blockNumber, queryStartNotIrr)
+	if nil != err {
+		log.Error("Failed to CollectNextEpochValidators", "blockNumber", blockHash, "blockHash", blockNumber, "err", err)
+		return
+	}
+
 	//获取所有质押节点（包含详细信息，25中的提出退出节点，不再存在此列表中）
 	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
 	if nil != err {
 		log.Error("Failed to GetCandidateList", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	validatorExQueue := make(staking.ValidatorExQueue, len(validators.Arr))
-	for k, v := range validators.Arr {
+	validatorExQueue := make(staking.ValidatorExQueue, len(nextValidators.Arr))
+	for k, v := range nextValidators.Arr {
 		validatorExQueue[k] = &staking.ValidatorEx{
 			ValidatorTerm:   v.ValidatorTerm,
 			NodeId:          v.NodeId,
@@ -350,19 +370,21 @@ func (m *Monitor) CollectValidators(blockHash common.Hash, blockNumber uint64, v
 	}
 	json := ToJson(validatorExQueue)
 
-	epoch := xutil.CalculateEpoch(blockNumber)
-
-	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
-	dbKey := ValidatorKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
+	if blockNumber == 1 {
+		nextEpoch = 1
+	}
+	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
 	return
 }
 
-// 保存201名单（包含详细信息）
-// epoch轮数从1开始，key的组成是：VerifierKey+每个epoch轮的开始块高
-func (m *Monitor) CollectVerifiers(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
+// CollectNextEpochVerifiers 保存201名单（包含详细信息）
+// CollectNextEpochVerifiers 在上个epoch的结束块高上，收集新的Verifiers名单（201名单，包含详细信息）
+// epoch轮数从1开始，key的组成是：VerifiersOfEpochKey+每个epoch轮的开始块高
+func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
 	//获取201名单（只包含必要信息）
 	verifiers, err := m.stakingPlugin.GetVerifierArray(blockHash, blockNumber, queryStartNotIrr)
 	if nil != err {
@@ -427,10 +449,11 @@ func (m *Monitor) CollectVerifiers(blockHash common.Hash, blockNumber uint64, qu
 	}
 	json := ToJson(validatorExQueue)
 
-	epoch := xutil.CalculateEpoch(blockNumber)
-
-	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
-	dbKey := VerifierKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
+	if blockNumber == 1 {
+		nextEpoch = 1
+	}
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
@@ -448,12 +471,12 @@ func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, 
 
 	var implicitPPOSTx *ImplicitPPOSTx
 	if len(data) == 0 {
-		implicitPPOSTx = &ImplicitPPOSTx{ContractTxMap: make(map[common.Hash][]*ContractTx)}
+		implicitPPOSTx = &ImplicitPPOSTx{PPOSTxMap: make(map[common.Hash][]*PPOSTx)}
 	} else {
 		ParseJson(data, &implicitPPOSTx)
 	}
-	contractTx := &ContractTx{From: from, To: to, Input: input, Result: result}
-	implicitPPOSTx.ContractTxMap[txHash] = append(implicitPPOSTx.ContractTxMap[txHash], contractTx)
+	contractTx := &PPOSTx{From: from, To: to, Input: input, Result: result}
+	implicitPPOSTx.PPOSTxMap[txHash] = append(implicitPPOSTx.PPOSTxMap[txHash], contractTx)
 	json := ToJson(implicitPPOSTx)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)

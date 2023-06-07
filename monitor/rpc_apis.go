@@ -31,6 +31,7 @@ import (
 }*/
 
 type Backend interface {
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 }
@@ -51,8 +52,8 @@ func NewMonitorAPIs(b Backend) []rpc.API {
 	}
 }
 
-// GetExtReceiptsByBlock returns the transaction receipt for the given block number.
-func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interface{}, error) {
+// GetReceiptExtsByBlockNumber returns the transaction receipt for the given block number.
+func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[string]interface{}, error) {
 	blockNr := rpc.BlockNumber(blockNumber)
 	block, err := api.b.BlockByNumber(nil, blockNr)
 	if block == nil {
@@ -66,23 +67,23 @@ func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interfac
 		log.Error("GetExtReceipts, get receipt error", "receipts:", receipts)
 	}
 
-	for key, value := range block.Transactions() {
+	for idx, tx := range block.Transactions() {
 		//tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), value.Hash())
 		//if tx == nil {
 		//	log.Error("rpcGetTransactionByBlock, get tx error","blockHash:",blockHash,"blockNumber:",blockNumber,"index:",index)
 		//	continue
 		//}
-		if len(receipts) <= int(key) {
-			log.Error("rpcGetTransactionByBlock, get receipt length error", "receipts:", receipts, "index:", key)
+		if len(receipts) <= int(idx) {
+			log.Error("rpcGetTransactionByBlock, get receipt length error", "receipts:", receipts, "index:", idx)
 			continue
 		}
-		receipt := receipts[key]
+		receipt := receipts[idx]
 
 		fields := map[string]interface{}{
 			//"blockHash":         blockHash,
 			//"blockNumber":       hexutil.Uint64(blockNumber),
-			"transactionHash":  value.Hash(),
-			"transactionIndex": hexutil.Uint64(key),
+			"transactionHash":  tx.Hash(),
+			"transactionIndex": hexutil.Uint64(idx),
 			//"from":              from,
 			//"to":                tx.To(),
 			"gasUsed": hexutil.Uint64(receipt.GasUsed),
@@ -107,7 +108,7 @@ func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interfac
 		}
 
 		// 把tx.to==nil/opCreate/opCreate2操作码3种方式建的合约地址拿出来
-		createdContractInfoList := MonitorInstance().GetCreatedContracts(block.NumberU64(), value.Hash())
+		createdContractInfoList := MonitorInstance().GetCreatedContracts(tx.Hash())
 		if nil == createdContractInfoList {
 			fields["contractCreated"] = []*ContractInfo{}
 		} else {
@@ -115,7 +116,7 @@ func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interfac
 		}
 
 		// 把opSuicide操作码销毁的合约地址拿出来，并放入fields["contractSuicided"]
-		suicidedContractInfoList := MonitorInstance().GetSuicidedContracts(block.NumberU64(), value.Hash())
+		suicidedContractInfoList := MonitorInstance().GetSuicidedContracts(block.NumberU64(), tx.Hash())
 		if nil == suicidedContractInfoList {
 			fields["contractSuicided"] = []*ContractInfo{}
 		} else {
@@ -123,7 +124,7 @@ func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interfac
 		}
 
 		// 把本交易发现的代理关系拿出来，放入proxyContract
-		proxyPatternList := MonitorInstance().GetProxyPatterns(block.NumberU64(), value.Hash())
+		proxyPatternList := MonitorInstance().GetProxyPatterns(block.NumberU64(), tx.Hash())
 		if nil == proxyPatternList {
 			fields["proxyPatterns"] = []*ProxyPattern{}
 		} else {
@@ -131,23 +132,21 @@ func (api *MonitorAPI) GetExtReceipts(blockNumber uint64) ([]map[string]interfac
 		}
 
 		// 把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
-		embedTransferList := MonitorInstance().GetUnusualTransferTx(blockNumber, value.Hash())
+		embedTransferList := MonitorInstance().GetUnusualTransferTx(blockNumber, tx.Hash())
 		if embedTransferList == nil {
 			fields["embedTransfer"] = []*UnusualTransferTx{}
 		} else {
 			fields["embedTransfer"] = embedTransferList
 		}
-		queue[key] = fields
+		queue[idx] = fields
 	}
 	return queue, nil
 }
 
-func (api *MonitorAPI) GetHistoryVerifiers(blockNumber uint64) (staking.ValidatorExQueue, error) {
+func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
 	// epoch starts from 1
 	epoch := xutil.CalculateEpoch(blockNumber)
-	//todo: 直接用epoch做key
-	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
-	dbKey := VerifierKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch, 10)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -161,15 +160,13 @@ func (api *MonitorAPI) GetHistoryVerifiers(blockNumber uint64) (staking.Validato
 	var validatorExQueue staking.ValidatorExQueue
 	ParseJson(data, &validatorExQueue)
 
-	return validatorExQueue, nil
+	return &validatorExQueue, nil
 }
 
-func (api *MonitorAPI) GetHistoryValidators(blockNumber uint64) staking.ValidatorExQueue {
+func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) *staking.ValidatorExQueue {
 	// epoch starts from 1
 	epoch := xutil.CalculateEpoch(blockNumber)
-
-	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
-	dbKey := ValidatorKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(epoch, 10)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -181,10 +178,10 @@ func (api *MonitorAPI) GetHistoryValidators(blockNumber uint64) staking.Validato
 	}
 	var validators staking.ValidatorExQueue
 	ParseJson(data, &validators)
-	return validators
+	return &validators
 }
 
-func (api *MonitorAPI) GetHistoryEpochInfo(blockNumber uint64) *EpochView {
+func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) *EpochView {
 	epoch := xutil.CalculateEpoch(blockNumber)
 	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
@@ -195,10 +192,10 @@ func (api *MonitorAPI) GetHistoryEpochInfo(blockNumber uint64) *EpochView {
 	if len(data) == 0 { //len(nil)==0
 		return nil
 	}
-	var view *EpochView
+	var view EpochView
 	ParseJson(data, &view)
 
-	if view == nil {
+	if &view == nil {
 		return nil
 	}
 
@@ -217,10 +214,10 @@ func (api *MonitorAPI) GetHistoryEpochInfo(blockNumber uint64) *EpochView {
 			view.CurStakingReward = curView.StakingReward
 		}
 	}
-	return view
+	return &view
 }
 
-func (api *MonitorAPI) GetSlashInfo(electionBlockNumber uint64) staking.SlashQueue {
+func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) *staking.SlashQueue {
 	dbKey := SlashKey.String() + "_" + strconv.FormatUint(electionBlockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
@@ -231,17 +228,21 @@ func (api *MonitorAPI) GetSlashInfo(electionBlockNumber uint64) staking.SlashQue
 	if nil != err {
 		return nil
 	}
-	return slashQueue
+	return &slashQueue
 }
 
+// GetNodeVersion 链上获取当前的节点版本
 func (api *MonitorAPI) GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error) {
 	return MonitorInstance().stakingPlugin.GetNodeVersion(blockHash)
 }
 
-func (api *MonitorAPI) GetAccountView(accounts []common.Address, blockHash common.Hash, blockNumber uint64) []*AccountView {
+// GetAccountView 链上获取帐号的当前信息，包括：余额，锁仓，委托等
+func (api *MonitorAPI) GetAccountView(accounts []common.Address) []*AccountView {
 	response := make([]*AccountView, len(accounts))
+	header, _ := api.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
+
 	for idx, address := range accounts {
-		accountView, err := getAccountView(address, monitor.statedb, blockHash, blockNumber)
+		accountView, err := getAccountView(address, monitor.statedb, header.Hash(), header.Number.Uint64())
 		if err != nil {
 			log.Error("getRestrictingBalance err", "account:", address, "err", err)
 			rb := &AccountView{
@@ -259,11 +260,11 @@ func (api *MonitorAPI) GetAccountView(accounts []common.Address, blockHash commo
 func getAccountView(account common.Address, state xcom.StateDB, blockHash common.Hash, blockNumber uint64) (*AccountView, error) {
 	accountView := &AccountView{
 		Account:                                 account,
-		FreeBalance:                             (*hexutil.Big)(state.GetBalance(account)),
-		RestrictingPlanLockedAmount:             (*hexutil.Big)(big.NewInt(0)),
-		RestrictingPlanPledgeAmount:             (*hexutil.Big)(big.NewInt(0)),
-		DelegationUnLockedFreeBalance:           (*hexutil.Big)(big.NewInt(0)),
-		DelegationUnLockedRestrictingPlanAmount: (*hexutil.Big)(big.NewInt(0)),
+		FreeBalance:                             state.GetBalance(account),
+		RestrictingPlanLockedAmount:             big.NewInt(0),
+		RestrictingPlanPledgeAmount:             big.NewInt(0),
+		DelegationUnLockedFreeBalance:           big.NewInt(0),
+		DelegationUnLockedRestrictingPlanAmount: big.NewInt(0),
 		DelegationLockedItems:                   make([]DelegationLockedItem, 0),
 	}
 	// 设置锁仓金
@@ -272,8 +273,8 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 		log.Error("failed to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err)
 		return nil, err
 	}
-	accountView.RestrictingPlanLockedAmount = (*hexutil.Big)(info.CachePlanAmount)
-	accountView.RestrictingPlanPledgeAmount = (*hexutil.Big)(info.AdvanceAmount)
+	accountView.RestrictingPlanLockedAmount = info.CachePlanAmount
+	accountView.RestrictingPlanPledgeAmount = info.AdvanceAmount
 
 	// 设置委托锁定金
 	locks, err2 := MonitorInstance().stakingPlugin.GetGetDelegationLockCompactInfo(blockHash, blockNumber, account)
@@ -281,19 +282,20 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 		log.Error("failed to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err2)
 		return nil, err2
 	}
-	accountView.DelegationUnLockedFreeBalance = locks.Released
-	accountView.DelegationUnLockedRestrictingPlanAmount = locks.RestrictingPlan
+	accountView.DelegationUnLockedFreeBalance = locks.Released.ToInt()
+	accountView.DelegationUnLockedRestrictingPlanAmount = locks.RestrictingPlan.ToInt()
 	for _, lock := range locks.Locks {
 		lockItem := DelegationLockedItem{
 			ExpiredEpoch:          lock.Epoch,
-			FreeBalance:           lock.Released,
-			RestrictingPlanAmount: lock.RestrictingPlan,
+			FreeBalance:           lock.Released.ToInt(),
+			RestrictingPlanAmount: lock.RestrictingPlan.ToInt(),
 		}
 		accountView.DelegationLockedItems = append(accountView.DelegationLockedItems, lockItem)
 	}
 	return accountView, nil
 }
 
+// GetProposalParticipants 获取提案到此区块为止的投票情况，包括：累计投票人数，赞成、反对，弃权的人数
 func (api *MonitorAPI) GetProposalParticipants(proposalID, blockHash common.Hash) (accuVerifierAccount, yeas, nays, abstentions uint64, err error) {
 	proposal, err := gov.GetProposal(proposalID, monitor.statedb)
 	if err != nil {
@@ -314,6 +316,7 @@ func (api *MonitorAPI) GetProposalParticipants(proposalID, blockHash common.Hash
 	return uint64(len(list)), yeas, nays, abstentions, nil
 }
 
+// GetImplicitPPOSTx
 func (api *MonitorAPI) GetImplicitPPOSTx(blockNumber uint64) (*ImplicitPPOSTx, error) {
 	log.Debug("GetImplicitPPOSTx", "blockNumber", blockNumber)
 	dbKey := ImplicitPPOSTxKey.String() + "_" + strconv.FormatUint(blockNumber, 10)
@@ -326,7 +329,7 @@ func (api *MonitorAPI) GetImplicitPPOSTx(blockNumber uint64) (*ImplicitPPOSTx, e
 	if len(data) == 0 { //len(nil)==0
 		return nil, err
 	}
-	var implicitPPOSTx *ImplicitPPOSTx
+	var implicitPPOSTx ImplicitPPOSTx
 	ParseJson(data, &implicitPPOSTx)
-	return implicitPPOSTx, nil
+	return &implicitPPOSTx, nil
 }

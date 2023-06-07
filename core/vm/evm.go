@@ -631,6 +631,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.vmConfig.Debug && evm.depth == 0 {
 		evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
 	}
+	if err != nil {
+		// stats: 收集新建的合约，不管是to为空时部署的合约，还是合约操作码opCreate/opCreate2都会走到这里
+		contractInfo := monitor.NewContractInfo(address, contract.Code)
+		log.Debug("new contract deployed in evm.create()", "contractInfo", string(monitor.ToJson(contractInfo)))
+		monitor.MonitorInstance().CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
+	}
 	return ret, address, contract.Gas, err
 
 }

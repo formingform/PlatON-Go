@@ -1721,10 +1721,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	return it.index, err
 }
 
-//joey.lyu
+// joey.lyu
 func (bc *BlockChain) ProcessDirectly(block *types.Block, state *state.StateDB, parent *types.Block) (types.Receipts, error) {
 	// Process block using the parent state as reference point.
 	start := time.Now()
+	log.Debug("set vmConfig.ProxyInspected = false", "vmConfig.NoRecursion", bc.vmConfig.NoRecursion)
+	bc.vmConfig.ProxyInspected = false
 	receipts, _, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
 	if err != nil {
 		log.Error("Failed to ProcessDirectly", "blockNumber", block.Number(), "blockHash", block.Hash(), "err", err)

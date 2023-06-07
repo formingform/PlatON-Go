@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/AppChain-Go/common"
-	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 	"github.com/PlatONnetwork/AppChain-Go/x/restricting"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
 	"github.com/PlatONnetwork/AppChain-Go/x/xcom"
@@ -14,6 +13,8 @@ type ContractRef interface {
 }
 
 type Intf_stakingPlugin interface {
+	GetNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error)
+	GetCurrValList(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetVerifierArray(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetCandidateList(common.Hash, uint64) (staking.CandidateHexQueue, error)
 	GetCandidateInfo(common.Hash, common.NodeAddress) (*staking.Candidate, error)
@@ -27,7 +28,7 @@ type Intf_restrictingPlugin interface {
 // 隐含的PPOS交易。
 // 通常来说，PPOS交易是有用户直接发给相应内置合约的。
 // 不过，用户自己部署的智能合约，也可以调用内置合约。这样，区块中的交易，看上去是个普通合约调用，但实际上，隐式的调用了PPOS合约（包括多次调用），产生了隐式的PPOS交易（多条），SCAN需要知道这些隐式PPOS交易的相关信息
-type ContractTx struct {
+type PPOSTx struct {
 	From   common.Address
 	To     common.Address
 	Input  []byte
@@ -36,8 +37,8 @@ type ContractTx struct {
 
 type ImplicitPPOSTx struct {
 	//key=原始交易hash
-	//value=合约交易信息
-	ContractTxMap map[common.Hash][]*ContractTx
+	//value=PPOSTx
+	PPOSTxMap map[common.Hash][]*PPOSTx
 }
 
 // 通常的转账交易是from/to/value，
@@ -74,15 +75,15 @@ type AccountView struct {
 	// 用户账户
 	Account common.Address `json:"account"`
 	// 账户余额
-	FreeBalance *hexutil.Big `json:"freeBalance"`
+	FreeBalance *big.Int `json:"freeBalance"`
 	// 锁仓锁定的余额
-	RestrictingPlanLockedAmount *hexutil.Big `json:"restrictingPlanLockedAmount,omitempty"`
+	RestrictingPlanLockedAmount *big.Int `json:"restrictingPlanLockedAmount,omitempty"`
 	// 锁仓欠释放的余额
-	RestrictingPlanPledgeAmount *hexutil.Big `json:"restrictingPlanPledgeAmount,omitempty"`
+	RestrictingPlanPledgeAmount *big.Int `json:"restrictingPlanPledgeAmount,omitempty"`
 	// 锁定结束的委托金，资金来源是用户账户余额
-	DelegationUnLockedFreeBalance *hexutil.Big `json:"delegationUnLockedFreeBalance,omitempty"`
+	DelegationUnLockedFreeBalance *big.Int `json:"delegationUnLockedFreeBalance,omitempty"`
 	// 锁定结束的委托金，资金来源是锁仓计划。用户来领取委托金时，一部分可以直接释放到用户账户；一部分可能重新回到锁仓计划中
-	DelegationUnLockedRestrictingPlanAmount *hexutil.Big `json:"delegationUnLockedRestrictingPlanAmount,omitempty"`
+	DelegationUnLockedRestrictingPlanAmount *big.Int `json:"delegationUnLockedRestrictingPlanAmount,omitempty"`
 	// 委托冻结冻结中明细
 	DelegationLockedItems []DelegationLockedItem `json:"delegationLockedItems,omitempty"`
 }
@@ -91,7 +92,7 @@ type DelegationLockedItem struct {
 	// 锁定截止周期
 	ExpiredEpoch uint32 `json:"expiredEpoch,omitempty"`
 	// 处于锁定期的委托金，资金来源是用户账户余额
-	FreeBalance *hexutil.Big `json:"FreeBalance,omitempty"`
+	FreeBalance *big.Int `json:"FreeBalance,omitempty"`
 	//处于锁定期的委托金，资金来源是锁仓计划
-	RestrictingPlanAmount *hexutil.Big `json:"restrictingPlanAmount,omitempty"`
+	RestrictingPlanAmount *big.Int `json:"restrictingPlanAmount,omitempty"`
 }

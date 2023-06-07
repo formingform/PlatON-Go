@@ -819,7 +819,7 @@ func (rmp *RewardMgrPlugin) CalcEpochReward(blockHash common.Hash, head *types.H
 		"epochTotalReward", epochTotalReward, "newBlockRewardRate", xcom.NewBlockRewardRate(), "epochTotalNewBlockReward", epochTotalNewBlockReward,
 		"epochTotalStakingReward", epochTotalStakingReward, "epochBlocks", epochBlocks, "newBlockReward", newBlockReward)
 
-	monitor.MonitorInstance().CollectionEpochInfo(
+	monitor.MonitorInstance().CollectionNextEpochInfo(
 		xutil.CalculateEpoch(head.Number.Uint64()),
 		newBlockReward,
 		epochTotalStakingReward,
