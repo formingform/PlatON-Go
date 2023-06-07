@@ -74,7 +74,7 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 		//	continue
 		//}
 		if len(receipts) <= int(idx) {
-			log.Error("rpcGetTransactionByBlock, get receipt length error", "receipts:", receipts, "index:", idx)
+			log.Error("fail to GetReceiptExtsByBlockNumber", "receipts:", receipts, "index:", idx)
 			continue
 		}
 		receipt := receipts[idx]
@@ -150,7 +150,7 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.V
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to GetHistoryVerifiers", "blockNumber", blockNumber, "err", err)
+		log.Error("fail to GetVerifiersByBlockNumber", "blockNumber", blockNumber, "err", err)
 		return nil, err
 	}
 
@@ -170,7 +170,7 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) *staking.V
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to GetHistoryValidators", "blockNumber", blockNumber, "err", err)
+		log.Error("fail to GetValidatorsByBlockNumber", "blockNumber", blockNumber, "err", err)
 		return nil
 	}
 	if len(data) == 0 { //len(nil)==0
@@ -186,7 +186,7 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) *EpochView 
 	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to GetHistoryEpochInfo", "blockNumber", blockNumber, "epoch", epoch, "err", err)
+		log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch, "err", err)
 		return nil
 	}
 	if len(data) == 0 { //len(nil)==0
@@ -203,7 +203,7 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) *EpochView 
 		dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch-1, 10)
 		data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 		if nil != err && err != ErrNotFound {
-			log.Error("failed to GetHistoryEpochInfo", "blockNumber", blockNumber, "epoch", epoch-1, "err", err)
+			log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch-1, "err", err)
 			return nil
 		}
 		if len(data) > 0 { //len(nil)==0
@@ -244,7 +244,7 @@ func (api *MonitorAPI) GetAccountView(accounts []common.Address) []*AccountView 
 	for idx, address := range accounts {
 		accountView, err := getAccountView(address, monitor.statedb, header.Hash(), header.Number.Uint64())
 		if err != nil {
-			log.Error("getRestrictingBalance err", "account:", address, "err", err)
+			log.Error("fail to GetAccountView", "account:", address, "err", err)
 			rb := &AccountView{
 				Account: address,
 			}
@@ -270,7 +270,7 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 	// 设置锁仓金
 	_, info, err := MonitorInstance().restrictingPlugin.MustGetRestrictingInfoByDecode(state, account)
 	if err != nil {
-		log.Error("failed to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err)
+		log.Error("fail to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err)
 		return nil, err
 	}
 	accountView.RestrictingPlanLockedAmount = info.CachePlanAmount
@@ -279,7 +279,7 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 	// 设置委托锁定金
 	locks, err2 := MonitorInstance().stakingPlugin.GetGetDelegationLockCompactInfo(blockHash, blockNumber, account)
 	if err2 != nil {
-		log.Error("failed to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err2)
+		log.Error("fail to GetGetDelegationLockCompactInfo", "account", account.String(), "err", err2)
 		return nil, err2
 	}
 	accountView.DelegationUnLockedFreeBalance = locks.Released.ToInt()
@@ -322,7 +322,7 @@ func (api *MonitorAPI) GetImplicitPPOSTx(blockNumber uint64) (*ImplicitPPOSTx, e
 	dbKey := ImplicitPPOSTxKey.String() + "_" + strconv.FormatUint(blockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to load data from local db", "err", err)
+		log.Error("fail to GetImplicitPPOSTx", "err", err)
 		return nil, err
 	}
 
