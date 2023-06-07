@@ -131,12 +131,12 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 			fields["proxyPatterns"] = proxyPatternList
 		}
 
-		// 把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
-		embedTransferList := MonitorInstance().GetUnusualTransferTx(blockNumber, tx.Hash())
-		if embedTransferList == nil {
-			fields["embedTransfer"] = []*UnusualTransferTx{}
+		// 把交易中产生的非常规原生代币转账交易返回（原始交易是合约调用，才会产生非常规转账）
+		unusualTransferList := MonitorInstance().GetUnusualTransfer(blockNumber, tx.Hash())
+		if unusualTransferList == nil {
+			fields["unusualTransfer"] = []*UnusualTransfer{}
 		} else {
-			fields["embedTransfer"] = embedTransferList
+			fields["unusualTransfer"] = unusualTransferList
 		}
 		queue[idx] = fields
 	}

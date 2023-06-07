@@ -487,13 +487,13 @@ const (
 
 type Description struct {
 	// External Id for the third party to pull the node description (with length limit)
-	ExternalId string
+	ExternalId string `json:"externalId,omitempty"`
 	// The Candidate Node's Name  (with a length limit)
-	NodeName string
+	NodeName string `json:"nodeName,omitempty"`
 	// The third-party home page of the node (with a length limit)
-	Website string
+	Website string `json:"website,omitempty"`
 	// Description of the node (with a length limit)
-	Details string
+	Details string `json:"details,omitempty"`
 }
 
 func (desc *Description) CheckLength() error {
@@ -904,7 +904,7 @@ type ValidatorEx struct {
 	// The account used to initiate the staking
 	StakingAddress common.Address `json:"stakingAddress,omitempty"`
 	// The account receive the block rewards and the staking rewards
-	BenefitAddress common.Address
+	BenefitAddress common.Address `json:"benefitAddress,omitempty"`
 	// Delegate reward amount percent for current settlement cycle
 	RewardPer uint16
 	// Delegate reward amount percent for next settlement cycle

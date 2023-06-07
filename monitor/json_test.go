@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/AppChain-Go/common"
+	"github.com/PlatONnetwork/AppChain-Go/p2p/discover"
+	"github.com/PlatONnetwork/AppChain-Go/x/staking"
 	"math/big"
 	"testing"
 )
@@ -53,5 +55,32 @@ func TestAccountView(t *testing.T) {
 		RestrictingPlanAmount: new(big.Int).SetUint64(uint64(491292)),
 	}
 	accountView.DelegationLockedItems = append(accountView.DelegationLockedItems, lockItem)
-	t.Logf("accountView:%s", string(ToJson(accountView)))
+	jsonByte := ToJson(accountView)
+
+	t.Logf("accountView:%s", string(jsonByte))
+	var view *AccountView
+	ParseJson(jsonByte, view)
+
+	t.Logf("view:%s", view.Account.Hex())
+
+}
+
+func TestValidatorEx(t *testing.T) {
+	desc := staking.Description{
+		NodeName: "testNode",
+		Website:  "http://url",
+	}
+	validatorEx := &staking.ValidatorEx{
+		NodeId:         discover.MustHexID("0x362003c50ed3a523cdede37a001803b8f0fed27cb402b3d6127a1a96661ec202318f68f4c76d9b0bfbabfd551a178d4335eaeaa9b7981a4df30dfc8c0bfe3384"),
+		StakingAddress: common.Address{0x01},
+		Description:    desc,
+	}
+
+	jsonByte := ToJson(validatorEx)
+
+	t.Logf("validatorEx:%s", string(jsonByte))
+	var view staking.ValidatorEx
+	ParseJson(jsonByte, &view)
+
+	t.Logf("validatorEx.name:%s", view.NodeName)
 }

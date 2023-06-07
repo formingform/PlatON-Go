@@ -15,7 +15,7 @@ import (
 type MonitorDbKey int
 
 const (
-	UnusualTransferTxKey MonitorDbKey = iota
+	UnusualTransferKey MonitorDbKey = iota
 	CreatedContractKey
 	SuicidedContractKey
 	ProxyPatternKey
@@ -30,7 +30,7 @@ const (
 // 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
 func (dbKey MonitorDbKey) String() string {
 	return [...]string{
-		"UnusualTransferTxKey",
+		"UnusualTransferKey",
 		"CreatedContractKey",
 		"SuicidedContractKey",
 		"ProxyPatternKey",
@@ -86,17 +86,17 @@ func (m *Monitor) SetRestrictingPlugin(pluginImpl Intf_restrictingPlugin) {
 func (m *Monitor) CollectUnusualTransferTx(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
 	log.Debug("CollectUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
-	dbKey := UnusualTransferTxKey.String() + "_" + txHash.String()
+	dbKey := UnusualTransferKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load unusual transfers", "err", err)
 		return
 	}
 
-	var unusualTransferTxList []*UnusualTransferTx
+	var unusualTransferTxList []*UnusualTransfer
 	ParseJson(data, &unusualTransferTxList)
 
-	unusualTransferTx := new(UnusualTransferTx)
+	unusualTransferTx := new(UnusualTransfer)
 	unusualTransferTx.TxHash = txHash
 	unusualTransferTx.From = from
 	unusualTransferTx.To = to
@@ -113,17 +113,17 @@ func (m *Monitor) CollectUnusualTransferTx(blockNumber uint64, txHash common.Has
 }
 
 // 查询非常规的转账交易
-func (m *Monitor) GetUnusualTransferTx(blockNumber uint64, txHash common.Hash) []*UnusualTransferTx {
-	log.Debug("GetUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex())
+func (m *Monitor) GetUnusualTransfer(blockNumber uint64, txHash common.Hash) []*UnusualTransfer {
+	log.Debug("GetUnusualTransfer", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
-	dbKey := UnusualTransferTxKey.String() + "_" + txHash.String()
+	dbKey := UnusualTransferKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("failed to load unusual transfers", "err", err)
 		return nil
 	}
 
-	var unusualTransferTxList []*UnusualTransferTx
+	var unusualTransferTxList []*UnusualTransfer
 	ParseJson(data, &unusualTransferTxList)
 	return unusualTransferTxList
 }
