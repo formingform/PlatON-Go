@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package xcom
 
 import (
@@ -60,6 +59,7 @@ func StorageIncIssuanceNumber(hash common.Hash, snapshotDB snapshotdb.DB, incIss
 	return nil
 }
 
+// 增发块高，是epoch的end block
 func LoadIncIssuanceNumber(hash common.Hash, snapshotDB snapshotdb.DB) (uint64, error) {
 	incIssuanceNumberByte, err := snapshotDB.Get(hash, IncIssuanceNumberKey)
 	if nil != err {
@@ -94,6 +94,7 @@ func StorageIncIssuanceTime(hash common.Hash, snapshotDB snapshotdb.DB, incTime 
 	return nil
 }
 
+// 获取增发时间，是epoch的end block
 func LoadIncIssuanceTime(hash common.Hash, snapshotDB snapshotdb.DB) (int64, error) {
 	incTimeByte, err := snapshotDB.Get(hash, IncIssuanceTimeKey)
 	if nil != err {

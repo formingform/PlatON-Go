@@ -17,8 +17,11 @@
 package vm
 
 import (
+	"encoding/hex"
 	"github.com/PlatONnetwork/AppChain-Go/common"
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
+	"github.com/PlatONnetwork/AppChain-Go/log"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"github.com/PlatONnetwork/AppChain-Go/params"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
@@ -390,16 +393,21 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // opExtCodeHash returns the code hash of a specified account.
 // There are several cases when the function is called, while we can relay everything
 // to `state.GetCodeHash` function to ensure the correctness.
-//   (1) Caller tries to get the code hash of a normal contract account, state
+//
+//	(1) Caller tries to get the code hash of a normal contract account, state
+//
 // should return the relative code hash and set it as the result.
 //
-//   (2) Caller tries to get the code hash of a non-existent account, state should
+//	(2) Caller tries to get the code hash of a non-existent account, state should
+//
 // return common.Hash{} and zero will be set as the result.
 //
-//   (3) Caller tries to get the code hash for an account without contract code,
+//	(3) Caller tries to get the code hash for an account without contract code,
+//
 // state should return emptyCodeHash(0xc5d246...) as the result.
 //
-//   (4) Caller tries to get the code hash of a precompiled account, the result
+//	(4) Caller tries to get the code hash of a precompiled account, the result
+//
 // should be zero or emptyCodeHash.
 //
 // It is worth noting that in order to avoid unnecessary create and clean,
@@ -408,10 +416,12 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx
 // If the precompile account is not transferred any amount on a private or
 // customized chain, the return value will be zero.
 //
-//   (5) Caller tries to get the code hash for an account which is marked as suicided
+//	(5) Caller tries to get the code hash for an account which is marked as suicided
+//
 // in the current transaction, the code hash of this account should be returned.
 //
-//   (6) Caller tries to get the code hash for an account which is marked as deleted,
+//	(6) Caller tries to get the code hash for an account which is marked as deleted,
+//
 // this account should be regarded as a non-existent account and zero should be returned.
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
 	slot := callContext.stack.peek()
@@ -690,7 +700,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.Call(InvokedByContract, callContext.contract, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
@@ -703,6 +713,10 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		callContext.memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	callContext.contract.Gas += returnGas
+
+	if IsPlatONPrecompiledContract(toAddr, false) {
+		monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
+	}
 
 	return ret, nil
 }
@@ -767,6 +781,29 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 	}
 	callContext.contract.Gas += returnGas
 
+	if IsPlatONPrecompiledContract(toAddr, false) {
+		monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
+	}
+
+	// TODO:
+	// caller means the sender of the raw transaction, but not the proxy contract address.
+	//to check if the toAddr is a contract, and if true, then save the relations of caller and toAddr, and the scan will pull this info(or push to scan)
+	if !interpreter.evm.vmConfig.ProxyInspected {
+		if !monitor.MonitorInstance().IsProxied(callContext.contract.self.Address(), toAddr) {
+			selfInfo := monitor.NewContractInfo(callContext.contract.self.Address(), interpreter.evm.StateDB.GetCode(callContext.contract.self.Address()))
+			targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
+			log.Debug("delegate call details", "self", string(monitor.ToJson(selfInfo)), "target", string(monitor.ToJson(targetInfo)))
+
+			isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+			//---
+			if isProxyPattern == true {
+				log.Debug("proxy pattern found")
+				monitor.MonitorInstance().CollectProxyPattern(interpreter.evm.StateDB.TxHash(), selfInfo, targetInfo)
+			} else {
+				log.Debug("proxy pattern not found")
+			}
+		}
+	}
 	return ret, nil
 }
 
@@ -821,6 +858,17 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 	balance := interpreter.evm.StateDB.GetBalance(callContext.contract.Address())
 	interpreter.evm.StateDB.AddBalance(common.Address(beneficiary.Bytes20()), balance)
 	interpreter.evm.StateDB.Suicide(callContext.contract.Address())
+
+	//stats: 把销毁的合约记录下来
+	log.Debug("processing contract suicide", "address", callContext.contract.Address())
+	monitor.MonitorInstance().CollectSuicidedContract(interpreter.evm.StateDB.TxHash(), callContext.contract.Address())
+
+	//stats: 收集隐含交易
+	if balance.Sign() > 0 {
+		log.Info("collect unusual transfer in opSuicide()", "blockNumber", interpreter.evm.Context.BlockNumber.Uint64(), "txHash", interpreter.evm.StateDB.TxHash(), "caller", callContext.contract.Address().Bech32(), "to", common.Address(beneficiary.Bytes20()).Bech32(), "&value", &balance)
+		monitor.MonitorInstance().CollectUnusualTransferTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.Address(), common.Address(beneficiary.Bytes20()), balance)
+	}
+
 	return nil, nil
 }
 
@@ -906,4 +954,58 @@ func makeSwap(size int64) executionFunc {
 		callContext.stack.swap(int(size))
 		return nil, nil
 	}
+}
+
+func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
+	log.Debug("inspectProxyPattern", "selfInfo.Type==3", selfInfo.Type == monitor.GENERAL, "targetInfo.Type==0", targetInfo.Type == monitor.ERC20)
+
+	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
+	evm.vmConfig.ProxyInspected = true
+
+	if selfInfo.Type == monitor.GENERAL {
+		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
+			// get name/symbol/decimals /totalSupper
+			selfNameBytes, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
+			targetNameBytes, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
+
+			selfSymbolBytes, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
+			targetSymbolBytes, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
+
+			selfDecimalsBytes, decimalsErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
+			targetDecimalsBytes, decimalsErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForDecimals)
+
+			selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
+			targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
+
+			log.Debug("inspectProxyPattern", "selfNameBytes", hex.EncodeToString(selfNameBytes), "selfSymbolBytes", hex.EncodeToString(selfSymbolBytes), "selfDecimalsBytes", hex.EncodeToString(selfDecimalsBytes), "selfTotalSupplyBytes", hex.EncodeToString(selfTotalSupplyBytes))
+			// the target bin seems as an ERC20, but we cannot retrieve its name, symbol, decimals or totalSupply
+			// the caller bin seems as a general contract, but we can retrieve its name, symbol, decimals or totalSupply
+			// so, we think the caller is a proxy, and the target is an implementation
+			if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil && decimalsErr1 == nil && decimalsErr2 == nil && totalSupplyErr1 == nil && totalSupplyErr2 == nil {
+				selfName := monitor.UnpackName(selfNameBytes)
+				targetName := monitor.UnpackName(targetNameBytes)
+
+				selfSymbol := monitor.UnpackSymbol(selfSymbolBytes)
+				targetSymbol := monitor.UnpackSymbol(targetSymbolBytes)
+
+				selfDecimals := monitor.UnpackDecimals(selfDecimalsBytes)
+				targetDecimals := monitor.UnpackDecimals(targetDecimalsBytes)
+
+				selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
+				targetTotalSupply := monitor.UnpackTotalSupply(targetTotalSupplyBytes)
+				if len(selfName) > 0 && len(targetName) == 0 &&
+					len(selfSymbol) > 0 && len(targetSymbol) == 0 &&
+					selfDecimals > 0 && targetDecimals == 0 &&
+					selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
+					targetInfo.TokenName = selfName
+					targetInfo.TokenSymbol = selfSymbol
+					targetInfo.TokenDecimals = selfDecimals
+					targetInfo.TokenTotalSupply = selfTotalSupply
+					return true
+				}
+
+			}
+		}
+	}
+	return false
 }

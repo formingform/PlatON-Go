@@ -32,6 +32,6 @@ func TestJsonEncode(t *testing.T) {
 		RemainEpoch:   4,
 		AvgPackTime:   2 * 1000,
 	}
-	dataReward := toJson(stakingReward)
+	dataReward := ToJson(stakingReward)
 	t.Logf("dataReward:{}", hexutil.Encode(dataReward))
 }

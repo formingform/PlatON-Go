@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/PlatONnetwork/AppChain-Go/common/sort"
 	"github.com/PlatONnetwork/AppChain-Go/ethdb"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"github.com/PlatONnetwork/AppChain-Go/rlp"
 
 	"math/big"
@@ -299,6 +300,7 @@ func (sk *StakingPlugin) GetValidatorHistoryList(targetBlockNumber uint64) ([]*s
 	return resultList, nil
 }
 
+// 区块交易执行完成后执行
 func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, state xcom.StateDB) error {
 
 	epoch := xutil.CalculateEpoch(header.Number.Uint64())
@@ -321,6 +323,7 @@ func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, s
 		}
 	}
 
+	// 执行选举，选出下个epoch的验人
 	if xutil.IsElection(header.Number.Uint64()) {
 
 		// ELection next round validators
@@ -335,16 +338,28 @@ func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, s
 	return nil
 }
 
+// 区块打包完成入链时执行。主要要过滤出新选出的节点，然后本节点建立和这些新节点的p2p连接
 func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) error {
+	//当区块=1时，要把当前的（内置）的共识节点保存到本地db以备后续查询
+	if block.NumberU64() == uint64(1) {
+		current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+		if nil != err {
+			log.Error("Failed to Query Next validators on stakingPlugin Confirmed When Election block",
+				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
+			return err
+		}
+		monitor.MonitorInstance().CollectValidators(block.Hash(), block.NumberU64(), current)
+	}
 
 	if xutil.IsElection(block.NumberU64()) {
-
 		next, err := sk.getNextValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
 			log.Error("Failed to Query Next validators on stakingPlugin Confirmed When Election block",
 				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
 			return err
 		}
+		//当区块=选举块时，要把选出的下一轮共识节点保存到本地db以备后续查询
+		monitor.MonitorInstance().CollectValidators(block.Hash(), block.NumberU64(), next)
 
 		current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
@@ -3927,6 +3942,41 @@ func (sk *StakingPlugin) checkRoundValidatorAddr(blockHash common.Hash, targetBl
 
 func (sk *StakingPlugin) HasStake(blockHash common.Hash, addr common.Address) (bool, error) {
 	return sk.db.HasAccountStakeRc(blockHash, addr)
+}
+
+func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error) {
+
+	iter := sk.db.IteratorCandidatePowerByBlockHash(blockHash, 0)
+	if err := iter.Error(); nil != err {
+		return nil, err
+	}
+	defer iter.Release()
+
+	queue := make(staking.ValidatorExQueue, 0)
+
+	count := 0
+
+	for iter.Valid(); iter.Next(); {
+
+		count++
+
+		log.Debug("GetNodeVersion: iter", "key", hex.EncodeToString(iter.Key()))
+
+		addrSuffix := iter.Value()
+		can, err := sk.db.GetCandidateStoreWithSuffix(blockHash, addrSuffix)
+		if nil != err {
+			return nil, err
+		}
+
+		canVersion := &staking.ValidatorEx{
+			NodeId:         can.NodeId,
+			ProgramVersion: can.ProgramVersion,
+		}
+		queue = append(queue, canVersion)
+	}
+	log.Debug("GetNodeVersion: loop count", "count", count)
+
+	return queue, nil
 }
 
 func calcCandidateTotalAmount(can *staking.Candidate) *big.Int {

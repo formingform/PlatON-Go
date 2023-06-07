@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PlatONnetwork/AppChain-Go/common/sort"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"math"
 	"math/big"
 	"sync"
@@ -817,6 +818,17 @@ func (rmp *RewardMgrPlugin) CalcEpochReward(blockHash common.Hash, head *types.H
 	log.Debug("Call CalcEpochReward, Cycle reward", "currBlockNumber", head.Number, "currBlockHash", blockHash, "currBlockTime", head.Time,
 		"epochTotalReward", epochTotalReward, "newBlockRewardRate", xcom.NewBlockRewardRate(), "epochTotalNewBlockReward", epochTotalNewBlockReward,
 		"epochTotalStakingReward", epochTotalStakingReward, "epochBlocks", epochBlocks, "newBlockReward", newBlockReward)
+
+	monitor.MonitorInstance().CollectionEpochInfo(
+		xutil.CalculateEpoch(head.Number.Uint64()),
+		newBlockReward,
+		epochTotalStakingReward,
+		yearNumber,
+		yearStartBlockNumber,
+		uint32(remainEpoch),
+		avgPackTime,
+	)
+
 	return newBlockReward, epochTotalStakingReward, nil
 }
 
@@ -931,6 +943,7 @@ func StorageChainYearNumber(hash common.Hash, snapshotDB snapshotdb.DB, yearNumb
 	return nil
 }
 
+// LoadChainYearNumber returns the chain age starting from 0
 func LoadChainYearNumber(hash common.Hash, snapshotDB snapshotdb.DB) (uint32, error) {
 	chainYearNumberByte, err := snapshotDB.Get(hash, reward.ChainYearNumberKey)
 	if nil != err {

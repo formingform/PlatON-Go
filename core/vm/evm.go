@@ -19,6 +19,8 @@ package vm
 import (
 	"context"
 	"github.com/PlatONnetwork/AppChain-Go/common/vm"
+	"github.com/PlatONnetwork/AppChain-Go/log"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -36,6 +38,9 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/crypto"
 	"github.com/PlatONnetwork/AppChain-Go/params"
 )
+
+const InvokedByTx = false
+const InvokedByContract = true
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
@@ -290,7 +295,7 @@ func (evm *EVM) Interpreter() Interpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -356,6 +361,19 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			contract.UseGas(contract.Gas)
 		}
 	}
+
+	//stats: 收集隐含LAT交易
+	// Call修改的是被调用者的storage
+	log.Info("to check if called by contract", "invokedByContract", invokedByContract)
+	if invokedByContract {
+		if value.Sign() != 0 {
+			//前面检查是否可以转账时，只要value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value)
+			//那说明value也可能是负数
+			log.Info("collect unusual transfer tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", to.Address().Bech32(), "amount", value, "&value", &value)
+			monitor.MonitorInstance().CollectUnusualTransferTx(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
+		}
+	}
+
 	return ret, contract.Gas, err
 }
 
@@ -476,6 +494,50 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		}
 	}
 	return ret, contract.Gas, err
+}
+
+func (evm *EVM) StaticCallNoCost(caller ContractRef, addr common.Address, input []byte) (ret []byte, err error) {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		return nil, nil
+	}
+	// Fail if we're trying to execute above the call depth limit
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, ErrDepth
+	}
+
+	var (
+		to                                        = AccountRef(addr)
+		snapshotForSnapshotDB, snapshotForStateDB = evm.DBSnapshot()
+	)
+	// TODO
+	// We do an AddBalance of zero here, just in order to trigger a touch.
+	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
+	// but is the correct thing to do and matters on other networks, in tests, and potential
+	// future scenarios
+	evm.StateDB.AddBalance(addr, big0)
+	// Initialise a new contract and set the code that is to be used by the
+	// EVM. The contract is a scoped environment for this execution context
+	// only.
+	gas := uint64(999999999)
+	contract := NewContract(caller, to, new(big.Int), gas)
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
+
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// when we're in Homestead this also counts for code storage gas errors.
+	ret, err = run(evm, contract, input, true)
+	/*if err != nil {
+		evm.RevertToDBSnapshot(snapshotForSnapshotDB, snapshotForStateDB)
+		if err != ErrExecutionReverted {
+			contract.UseGas(contract.Gas)
+		}
+	}
+	return ret, contract.Gas, err
+	*/
+	// 全部回滚
+	evm.RevertToDBSnapshot(snapshotForSnapshotDB, snapshotForStateDB)
+	// 不消耗gas
+	return ret, err
 }
 
 type codeAndHash struct {

@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package plugin
 
 import (
@@ -23,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"math/big"
 	"sync"
 
@@ -169,6 +169,8 @@ func (sp *SlashingPlugin) BeginBlock(blockHash common.Hash, header *types.Header
 					log.Error("Failed to BeginBlock, call SlashCandidates is failed", "blockNumber", header.Number.Uint64(), "blockHash", blockHash.TerminalString(), "err", err)
 					return err
 				}
+				//stats: 收集被除法节点信息
+				monitor.MonitorInstance().CollectSlashInfo(header.Number.Uint64(), slashQueue)
 			}
 
 		}

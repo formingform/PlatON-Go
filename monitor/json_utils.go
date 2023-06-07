@@ -5,7 +5,7 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/log"
 )
 
-func toJson(obj interface{}) []byte {
+func ToJson(obj interface{}) []byte {
 	if obj == nil {
 		return []byte{}
 	}
@@ -19,7 +19,7 @@ func toJson(obj interface{}) []byte {
 
 }
 
-func parseJson(bs []byte, objRefer interface{}) {
+func ParseJson(bs []byte, objRefer interface{}) {
 	if len(bs) == 0 {
 		return
 	}

@@ -49,6 +49,8 @@ type Config struct {
 
 	// VM execution timeout duration (unit: ms)
 	VmTimeoutDuration uint64
+
+	ProxyInspected bool
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the

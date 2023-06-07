@@ -461,17 +461,17 @@ func newDelegationLockPeriod(epoch uint32, released, restrictingPlan *big.Int) *
 type DelegationLockHex struct {
 	// 锁定期
 	Locks []*DelegationLockPeriodHex
-	//处于解锁期的委托金
+	// 锁定结束的委托金，资金来源是用户账户余额
 	Released *hexutil.Big
-	//处于解锁期的委托金
+	// 锁定结束的委托金，资金来源是锁仓计划。用户来领取委托金时，一部分可以直接释放到用户账户；一部分可能重新回到锁仓计划中
 	RestrictingPlan *hexutil.Big
 }
 
 type DelegationLockPeriodHex struct {
 	// 锁定截止周期
 	Epoch uint32
-	//处于锁定期的委托金,解锁后释放到用户余额
+	//处于锁定期的委托金，资金来源是用户账户余额
 	Released *hexutil.Big
-	//处于锁定期的委托金,解锁后释放到用户锁仓账户
+	//处于锁定期的委托金，资金来源是锁仓计划
 	RestrictingPlan *hexutil.Big
 }

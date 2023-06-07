@@ -2,16 +2,11 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/AppChain-Go/common"
+	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 	"github.com/PlatONnetwork/AppChain-Go/core/state"
-	"github.com/PlatONnetwork/AppChain-Go/core/types"
 	"github.com/PlatONnetwork/AppChain-Go/log"
-	"github.com/PlatONnetwork/AppChain-Go/p2p/discover"
-	"github.com/PlatONnetwork/AppChain-Go/rlp"
-	"github.com/PlatONnetwork/AppChain-Go/x/plugin"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
-	"github.com/PlatONnetwork/AppChain-Go/x/xcom"
 	"github.com/PlatONnetwork/AppChain-Go/x/xutil"
-	"math"
 	"math/big"
 	"strconv"
 	"sync"
@@ -20,24 +15,41 @@ import (
 type MonitorDbKey int
 
 const (
-	EmbedTransferKey MonitorDbKey = iota
+	UnusualTransferTxKey MonitorDbKey = iota
 	CreatedContractKey
 	SuicidedContractKey
 	ProxyPatternKey
 	proxyPatternMapKey
 	ValidatorKey
 	VerifierKey
-	RewardKey
-	YearKey
-	InitNodeKey
+	EpochInfoKey
 	SlashKey
-	TransBlockKey
-	TransHashKey
+	ImplicitPPOSTxKey
 )
 
+// 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
+func (dbKey MonitorDbKey) String() string {
+	return [...]string{
+		"UnusualTransferTxKey",
+		"CreatedContractKey",
+		"SuicidedContractKey",
+		"ProxyPatternKey",
+		"proxyPatternMapKey",
+		"ValidatorKey",
+		"VerifierKey",
+		"EpochInfoKey",
+		"YearKey",
+		"InitNodeKey",
+		"SlashKey",
+		"ImplicitPPOSTxKey",
+	}[dbKey]
+}
+
 type Monitor struct {
-	statedb   *state.StateDB
-	monitordb *monitorDB
+	statedb           *state.StateDB
+	monitordb         *monitorDB
+	stakingPlugin     Intf_stakingPlugin
+	restrictingPlugin Intf_restrictingPlugin
 }
 
 var (
@@ -61,73 +73,59 @@ func MonitorInstance() *Monitor {
 	return monitor
 }
 
-// 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
-func (dbKey MonitorDbKey) String() string {
-	return [...]string{"EmbedTransferTx", "CreatedContractKey", "SuicidedContractKey", "ProxyPatternKey", "proxyPatternMapKey"}[dbKey]
+func (m *Monitor) SetStakingPlugin(pluginImpl Intf_stakingPlugin) {
+	monitor.stakingPlugin = pluginImpl
+}
+func (m *Monitor) SetRestrictingPlugin(pluginImpl Intf_restrictingPlugin) {
+	monitor.restrictingPlugin = pluginImpl
 }
 
-type EmbedTransfer struct {
-	TxHash common.Hash    `json:"txHash,-"`
-	From   common.Address `json:"from,omitempty"`
-	To     common.Address `json:"to,omitempty"`
-	Amount *big.Int       `json:"amount,omitempty"`
-}
+func (m *Monitor) CollectUnusualTransferTx(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
+	log.Debug("CollectUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
-type ProxyPattern struct {
-	Proxy          *ContractInfo `json:"proxy,omitempty"`
-	Implementation *ContractInfo `json:"implementation,omitempty"`
-}
-
-func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
-	log.Debug("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
-
-	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
+	dbKey := UnusualTransferTxKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to load embed transfers", "err", err)
+		log.Error("failed to load unusual transfers", "err", err)
 		return
 	}
 
-	var embedTransferList []*EmbedTransfer
-	parseJson(data, &embedTransferList)
+	var unusualTransferTxList []*UnusualTransferTx
+	ParseJson(data, &unusualTransferTxList)
 
-	embedTransfer := new(EmbedTransfer)
-	embedTransfer.TxHash = txHash
-	embedTransfer.From = from
-	embedTransfer.To = to
-	embedTransfer.Amount = amount
+	unusualTransferTx := new(UnusualTransferTx)
+	unusualTransferTx.TxHash = txHash
+	unusualTransferTx.From = from
+	unusualTransferTx.To = to
+	unusualTransferTx.Amount = amount
 
-	embedTransferList = append(embedTransferList, embedTransfer)
+	unusualTransferTxList = append(unusualTransferTxList, unusualTransferTx)
 
-	json := toJson(embedTransferList)
+	json := ToJson(unusualTransferTxList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
-		log.Debug("save embed transfers success")
+		log.Debug("save unusual transfers success")
 	}
 
 }
 
-func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
-	log.Debug("GetEmbedTransfer", "blockNumber", blockNumber, "txHash", txHash.Hex())
+func (m *Monitor) GetUnusualTransferTx(blockNumber uint64, txHash common.Hash) []*UnusualTransferTx {
+	log.Debug("GetUnusualTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
-	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
+	dbKey := UnusualTransferTxKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err {
-		log.Error("failed to load embed transfers", "err", err)
+		log.Error("failed to load unusual transfers", "err", err)
 		return nil
 	}
 
-	var embedTransferList []*EmbedTransfer
-	parseJson(data, &embedTransferList)
-	return embedTransferList
-}
-
-type ContractRef interface {
-	Address() common.Address
+	var unusualTransferTxList []*UnusualTransferTx
+	ParseJson(data, &unusualTransferTxList)
+	return unusualTransferTxList
 }
 
 func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
-	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(toJson(contractInfo)))
+	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(ToJson(contractInfo)))
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -136,11 +134,11 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 		return
 	}
 	var createdContractInfoList []*ContractInfo
-	parseJson(data, &createdContractInfoList)
+	ParseJson(data, &createdContractInfoList)
 
 	createdContractInfoList = append(createdContractInfoList, contractInfo)
 
-	json := toJson(createdContractInfoList)
+	json := ToJson(createdContractInfoList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save created contracts success")
@@ -148,7 +146,7 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 
 }
 
-func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func (m *Monitor) GetCreatedContracts(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
@@ -158,13 +156,13 @@ func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.H
 		return nil
 	}
 	var createdContractInfoList []*ContractInfo
-	parseJson(data, &createdContractInfoList)
+	ParseJson(data, &createdContractInfoList)
 
 	log.Debug("get created contracts success")
 	return createdContractInfoList
 }
 
-func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
+func (m *Monitor) CollectSuicidedContract(txHash common.Hash, suicidedContractAddr common.Address) {
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -173,14 +171,14 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 	}
 
 	var suicidedContractInfoList []*ContractInfo
-	parseJson(data, &suicidedContractInfoList)
+	ParseJson(data, &suicidedContractInfoList)
 
 	suicidedContract := new(ContractInfo)
 	suicidedContract.Address = suicidedContractAddr
 
 	suicidedContractInfoList = append(suicidedContractInfoList, suicidedContract)
 
-	json := toJson(suicidedContractInfoList)
+	json := ToJson(suicidedContractInfoList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save suicided contracts success")
@@ -188,7 +186,7 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 
 }
 
-func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
+func (m *Monitor) GetSuicidedContracts(blockNumber uint64, txHash common.Hash) []*ContractInfo {
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
@@ -198,7 +196,7 @@ func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.
 		return nil
 	}
 	var suicidedContractInfoList []*ContractInfo
-	parseJson(data, &suicidedContractInfoList)
+	ParseJson(data, &suicidedContractInfoList)
 
 	log.Debug("get suicided contracts success")
 	return suicidedContractInfoList
@@ -214,10 +212,10 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	}
 
 	var proxyPatternList []*ProxyPattern
-	parseJson(data, &proxyPatternList)
+	ParseJson(data, &proxyPatternList)
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
-	json := toJson(proxyPatternList)
+	json := ToJson(proxyPatternList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save proxy patterns success")
@@ -233,10 +231,10 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	}
 
 	var proxyPatternMap = make(map[common.Address]common.Address)
-	parseJson(data, &proxyPatternMap)
+	ParseJson(data, &proxyPatternMap)
 	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
 
-	json = toJson(proxyPatternMap)
+	json = ToJson(proxyPatternMap)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbMapKey), json)
 		log.Debug("save proxy map success")
@@ -252,7 +250,7 @@ func (m *Monitor) IsProxied(self, target common.Address) bool {
 	}
 
 	var proxyPatternMap map[common.Address]common.Address
-	parseJson(data, &proxyPatternMap)
+	ParseJson(data, &proxyPatternMap)
 	if value, exist := proxyPatternMap[self]; exist {
 		if value == target {
 			return true
@@ -261,7 +259,7 @@ func (m *Monitor) IsProxied(self, target common.Address) bool {
 	return false
 }
 
-func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
+func (m *Monitor) GetProxyPatterns(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
 	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
@@ -271,238 +269,207 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 		return nil
 	}
 	var proxyPatternList []*ProxyPattern
-	parseJson(data, &proxyPatternList)
+	ParseJson(data, &proxyPatternList)
 
 	log.Debug("get proxy patterns success")
 	return proxyPatternList
 }
 
-func (m *Monitor) CollectVerifiers(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
-	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
-
-	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err := m.monitordb.Get([]byte(dbKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy patterns", "err", err)
-		return nil
+func (m *Monitor) CollectionEpochInfo(epoch uint64, newBlockReward, epochTotalStakingReward *big.Int, chainAge uint32, yearStartBlockNumber uint64, remainEpochThisYear uint32, avgPackTime uint64) {
+	view := EpochView{
+		PackageReward:     newBlockReward,
+		StakingReward:     epochTotalStakingReward,
+		ChainAge:          chainAge + 1, // ChainAge starts from 1
+		YearStartBlockNum: yearStartBlockNumber,
+		YearEndBlockNum:   yearStartBlockNumber + uint64(remainEpochThisYear)*xutil.CalcBlocksEachEpoch(),
+		RemainEpoch:       remainEpochThisYear,
+		AvgPackTime:       avgPackTime,
 	}
-	var proxyPatternList []*ProxyPattern
-	parseJson(data, &proxyPatternList)
-
-	log.Debug("get proxy patterns success")
-	return proxyPatternList
+	json := ToJson(view)
+	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch, 10)
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("CollectionEpochInfo", "data", string(json))
 }
 
-func (m *Monitor) SetReward(block *types.Block, numStr string) error {
-	//set reward history
-	packageReward, err := plugin.LoadNewBlockReward(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
+// 保存25名单(包含详细信息）
+// epoch轮数从1开始，key的组成是：ValidatorKey+每个epoch轮的开始块高
+func (m *Monitor) CollectValidators(blockHash common.Hash, blockNumber uint64, validators *staking.ValidatorArray) {
+	//获取所有质押节点（包含详细信息，25中的提出退出节点，不再存在此列表中）
+	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
 	if nil != err {
-		log.Error("Failed to LoadNewBlockReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
+		log.Error("Failed to GetCandidateList", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
 	}
-	stakingReward, err := plugin.LoadStakingReward(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
-	if nil != err {
-		log.Error("Failed to LoadStakingReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	yearNum, err := plugin.LoadChainYearNumber(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
-	if nil != err {
-		log.Error("Failed to LoadChainYearNumber on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	var reward staking.Reward
-	if numStr == "0" {
-		reward = staking.Reward{
-			PackageReward: packageReward,
-			StakingReward: stakingReward,
-			YearNum:       yearNum + 1,
-			YearStartNum:  0,
-			YearEndNum:    xutil.CalcBlocksEachYear(),
-			RemainEpoch:   uint32(xutil.EpochsPerYear()),
-			AvgPackTime:   xcom.Interval() * 1000,
-		}
-		numberStart, err := rlp.EncodeToBytes(uint64(0))
-		if nil != err {
-			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		m.monitordb.Put([]byte(YearKey.String()+"1"), numberStart)
-	} else {
-		incIssuanceTime, err := xcom.LoadIncIssuanceTime(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
-		if nil != err {
-			log.Error("Failed to LoadIncIssuanceTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		number, err := xcom.LoadIncIssuanceNumber(block.Hash(), plugin.StakingInstance().GetStakingDB().GetDB())
-		if nil != err {
-			log.Error("Failed to LoadIncIssuanceTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
-		avgPackTime, err := xcom.LoadCurrentAvgPackTime()
-		if nil != err {
-			log.Error("Failed to LoadAvgPackTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		epochBlocks := xutil.CalcBlocksEachEpoch()
-		remainTime := incIssuanceTime - int64(block.Header().Time)
-		remainEpoch := 1
-		remainBlocks := math.Ceil(float64(remainTime) / float64(avgPackTime))
-		if remainBlocks > float64(epochBlocks) {
-			remainEpoch = int(math.Ceil(remainBlocks / float64(epochBlocks)))
-		}
-		//get the num of year
-		blocks := block.Number().Uint64() + uint64(remainEpoch)*epochBlocks
-		if number != 0 && block.Number().Uint64()%number == 0 {
-			yearTemp := strconv.FormatUint(uint64(yearNum+1), 10)
-			numberStart, err := rlp.EncodeToBytes(number)
-			if nil != err {
-				log.Error("mygod,Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-				return err
-			}
-			m.monitordb.Put([]byte(YearKey.String()+yearTemp), numberStart)
-			log.Debug("set yearNum", "yearTemp", yearTemp, "number", block.Number())
-		}
-		if number == blocks {
-			yearTemp := strconv.FormatUint(uint64(yearNum+1), 10)
-			data, err := m.monitordb.Get([]byte(YearKey.String() + yearTemp))
-			if nil != err {
-				log.Error("mygod,get YearName error", "key", YearKey.String()+yearTemp, "err", err)
-			}
-			err = rlp.DecodeBytes(data, &number)
-			if nil != err {
-				log.Error("mygod,DecodeBytes YearName error", "key", YearKey.String()+yearTemp, "err", err)
-			}
-		}
-		log.Debug("LoadNewBlockReward and LoadStakingReward", "packageReward", packageReward, "stakingReward", stakingReward, "hash", block.Hash(), "block number", block.Number(),
-			"blocks", blocks, "number", number)
-		reward = staking.Reward{
-			PackageReward: packageReward,
-			StakingReward: stakingReward,
-			YearNum:       yearNum + 1,
-			YearStartNum:  number,
-			YearEndNum:    blocks,
-			RemainEpoch:   uint32(remainEpoch),
-			AvgPackTime:   avgPackTime,
-		}
-	}
-	log.Debug("staking.Reward ,LoadNewBlockReward and LoadStakingReward", "packageReward", reward.PackageReward, "stakingReward", reward.StakingReward, "hash", block.Hash(), "number", block.Number())
-	dataReward, err := rlp.EncodeToBytes(reward)
-	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	m.monitordb.Put([]byte(RewardKey.String()+numStr), dataReward)
-	log.Debug("wow,insert rewardName history :", dataReward)
-	return nil
-}
-
-func (m *Monitor) SetValidator(block *types.Block, numStr string, nodeId discover.NodeID) (bool, map[discover.NodeID]struct{}, error) {
-	var isCurr bool
-	currMap := make(map[discover.NodeID]struct{})
-	current, err := plugin.StakingInstance().GetCurrValList(block.Hash(), block.NumberU64(), plugin.QueryStartNotIrr)
-	if nil != err {
-		log.Error("Failed to Query Current Round validators on stakingPlugin Confirmed When Election block",
-			"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
-		return isCurr, currMap, err
-	}
-	currentValidatorArray := &staking.ValidatorArraySave{
-		Start: current.Start,
-		End:   current.End,
-	}
-	vQSave := make(staking.ValidatorQueueSave, len(current.Arr))
-	for k, v := range current.Arr {
-		currMap[v.NodeId] = struct{}{}
-		if nodeId == v.NodeId {
-			isCurr = true
-		}
-		vQSave[k] = &staking.ValidatorSave{
-			ValidatorTerm: v.ValidatorTerm,
-			NodeId:        v.NodeId,
-		}
-	}
-	currentValidatorArray.Arr = vQSave
-	data, err := rlp.EncodeToBytes(currentValidatorArray)
-	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Election block", "err", err)
-		return isCurr, currMap, err
-	}
-
-	m.monitordb.Put([]byte(ValidatorKey.String()+numStr), data)
-	log.Debug("wow,insert validator history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", ValidatorKey.String()+numStr)
-	log.Debug("wow,insert validator history", "currentValidatorArray", currentValidatorArray)
-	return isCurr, currMap, nil
-}
-
-func (m *Monitor) SetVerifier(block *types.Block, numStr string) error {
-	current, err := plugin.StakingInstance().GetVerifierArray(block.Hash(), block.NumberU64(), plugin.QueryStartNotIrr)
-	if nil != err {
-		log.Error("Failed to Query Current Round verifiers on stakingPlugin Confirmed When Settletmetn block",
-			"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", err)
-		return err
-	}
-
-	currentCandidate, error := plugin.StakingInstance().GetCandidateList(block.Hash(), block.NumberU64())
-	if nil != error {
-		log.Error("Failed to Query Current Round candidate on stakingPlugin Confirmed When Settletmetn block",
-			"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", error)
-		return error
-	}
-	currentValidatorArray := &staking.ValidatorArraySave{
-		Start: current.Start,
-		End:   current.End,
-	}
-	vQSave := make(staking.ValidatorQueueSave, len(current.Arr))
-	for k, v := range current.Arr {
-		vQSave[k] = &staking.ValidatorSave{
+	validatorExQueue := make(staking.ValidatorExQueue, len(validators.Arr))
+	for k, v := range validators.Arr {
+		validatorExQueue[k] = &staking.ValidatorEx{
 			ValidatorTerm:   v.ValidatorTerm,
 			NodeId:          v.NodeId,
 			StakingBlockNum: v.StakingBlockNum,
+			ProgramVersion:  v.ProgramVersion,
 		}
-		var isCurrent = false
+		var notInCadidateList = true
+		// 给ValidatorEx补充详细信息
 		for _, cv := range currentCandidate {
 			if cv.NodeId == v.NodeId {
-				vQSave[k].DelegateRewardTotal = cv.DelegateRewardTotal.ToInt()
-				vQSave[k].DelegateTotal = cv.DelegateTotal.ToInt()
-				isCurrent = true
+				validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
+				validatorExQueue[k].DelegateTotal = cv.DelegateTotal
+				validatorExQueue[k].BenefitAddress = cv.BenefitAddress
+				validatorExQueue[k].StakingAddress = cv.StakingAddress
+				validatorExQueue[k].Website = cv.Website
+				validatorExQueue[k].Description = cv.Description
+				validatorExQueue[k].ExternalId = cv.ExternalId
+				validatorExQueue[k].NodeName = cv.NodeName
+				notInCadidateList = false
 				break
 			}
 		}
-		if !isCurrent {
+		if notInCadidateList {
+			// 不在currentCandidate的verifier，需要额外补充详细信息
 			nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
 			if nil != err {
 				log.Error("Failed to NodeId2Addr: parse current nodeId is failed", "err", err)
 			}
-			can, err := plugin.StakingInstance().GetCandidateInfo(block.Hash(), nodeIdAddr)
+			can, err := m.stakingPlugin.GetCandidateInfo(blockHash, nodeIdAddr)
 			if err != nil || can == nil {
 				log.Error("Failed to Query Current Round candidate info on stakingPlugin Confirmed When Settletmetn block",
-					"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", err)
+					"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 				log.Debug("Failed get can :", can)
 			} else {
-				vQSave[k].DelegateRewardTotal = can.DelegateRewardTotal
-				vQSave[k].DelegateTotal = can.DelegateTotal
+				validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
+				validatorExQueue[k].DelegateTotal = (*hexutil.Big)(can.DelegateTotal)
+				validatorExQueue[k].BenefitAddress = can.BenefitAddress
+				validatorExQueue[k].StakingAddress = can.StakingAddress
+				validatorExQueue[k].Website = can.Website
+				validatorExQueue[k].Description = can.Description
+				validatorExQueue[k].ExternalId = can.ExternalId
+				validatorExQueue[k].NodeName = can.NodeName
+				validatorExQueue[k].ProgramVersion = can.ProgramVersion
 			}
 		}
-
 	}
-	currentValidatorArray.Arr = vQSave
-	data, err := rlp.EncodeToBytes(currentValidatorArray)
+	json := ToJson(validatorExQueue)
+
+	epoch := xutil.CalculateEpoch(blockNumber)
+
+	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
+	dbKey := ValidatorKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	return
+}
+
+// 保存201名单（包含详细信息）
+// epoch轮数从1开始，key的组成是：VerifierKey+每个epoch轮的开始块高
+func (m *Monitor) CollectVerifiers(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
+	//获取201名单（只包含必要信息）
+	verifiers, err := m.stakingPlugin.GetVerifierArray(blockHash, blockNumber, queryStartNotIrr)
 	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
+		log.Error("Failed to Query Current Round verifiers on stakingPlugin Confirmed When Settletmetn block",
+			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
 	}
-	m.monitordb.Put([]byte(VerifierKey.String()+numStr), data)
-	log.Debug("wow,insert verifier history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", VerifierKey.String()+numStr)
-	log.Debug("wow,insert verifier history :", currentValidatorArray)
-
-	if numStr == "0" {
-		dataCandidate, err := rlp.EncodeToBytes(currentCandidate)
-		if nil != err {
-			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
+	//获取所有质押节点（包含详细信息，201中的提出退出节点，不再存在此列表中）
+	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
+	if nil != err {
+		log.Error("Failed to Query Current Round candidate on stakingPlugin Confirmed When Settletmetn block",
+			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
+	}
+	validatorExQueue := make(staking.ValidatorExQueue, len(verifiers.Arr))
+	for k, v := range verifiers.Arr {
+		validatorExQueue[k] = &staking.ValidatorEx{
+			ValidatorTerm:   v.ValidatorTerm,
+			NodeId:          v.NodeId,
+			StakingBlockNum: v.StakingBlockNum,
+			ProgramVersion:  v.ProgramVersion,
 		}
-		m.monitordb.Put([]byte(InitNodeKey.String()+"0"), dataCandidate)
-		log.Debug("wow,insert candidate  0:", currentCandidate)
+		var notInCadidateList = true
+		// 给ValidatorEx补充详细信息
+		for _, cv := range currentCandidate {
+			if cv.NodeId == v.NodeId {
+				validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
+				validatorExQueue[k].DelegateTotal = cv.DelegateTotal
+				validatorExQueue[k].BenefitAddress = cv.BenefitAddress
+				validatorExQueue[k].StakingAddress = cv.StakingAddress
+				validatorExQueue[k].Website = cv.Website
+				validatorExQueue[k].Description = cv.Description
+				validatorExQueue[k].ExternalId = cv.ExternalId
+				validatorExQueue[k].NodeName = cv.NodeName
+				notInCadidateList = false
+				break
+			}
+		}
+		if notInCadidateList {
+			// 不在currentCandidate的verifier，需要额外补充详细信息
+			nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
+			if nil != err {
+				log.Error("Failed to NodeId2Addr: parse current nodeId is failed", "err", err)
+			}
+			can, err := m.stakingPlugin.GetCandidateInfo(blockHash, nodeIdAddr)
+			if err != nil || can == nil {
+				log.Error("Failed to Query Current Round candidate info on stakingPlugin Confirmed When Settletmetn block",
+					"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+				log.Debug("Failed get can :", can)
+			} else {
+				validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
+				validatorExQueue[k].DelegateTotal = (*hexutil.Big)(can.DelegateTotal)
+				validatorExQueue[k].BenefitAddress = can.BenefitAddress
+				validatorExQueue[k].StakingAddress = can.StakingAddress
+				validatorExQueue[k].Website = can.Website
+				validatorExQueue[k].Description = can.Description
+				validatorExQueue[k].ExternalId = can.ExternalId
+				validatorExQueue[k].NodeName = can.NodeName
+				validatorExQueue[k].ProgramVersion = can.ProgramVersion
+			}
+		}
 	}
-	return nil
+	json := ToJson(validatorExQueue)
+
+	epoch := xutil.CalculateEpoch(blockNumber)
+
+	epochStartBlockNumber := (epoch - 1) * xutil.CalcBlocksEachEpoch()
+	dbKey := VerifierKey.String() + strconv.FormatUint(epochStartBlockNumber, 10)
+
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	return
+}
+
+// 收集隐式的ppos交易数据
+func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input, result []byte) {
+	dbKey := ImplicitPPOSTxKey.String() + "_" + strconv.FormatUint(blockNumber, 10)
+	data, err := m.monitordb.Get([]byte(dbKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load data from local db", "err", err)
+		return
+	}
+
+	var implicitPPOSTx *ImplicitPPOSTx
+	if len(data) == 0 {
+		implicitPPOSTx = &ImplicitPPOSTx{ContractTxMap: make(map[common.Hash][]*ContractTx)}
+	} else {
+		ParseJson(data, &implicitPPOSTx)
+	}
+	contractTx := &ContractTx{From: from, To: to, Input: input, Result: result}
+	implicitPPOSTx.ContractTxMap[txHash] = append(implicitPPOSTx.ContractTxMap[txHash], contractTx)
+	json := ToJson(implicitPPOSTx)
+	if len(json) > 0 {
+		m.monitordb.Put([]byte(dbKey), json)
+	}
+}
+
+func (m *Monitor) CollectSlashInfo(electionBlockNumber uint64, slashQueue staking.SlashQueue) {
+	if slashQueue == nil || len(slashQueue) == 0 {
+		return
+	}
+	dbKey := SlashKey.String() + "_" + strconv.FormatUint(electionBlockNumber, 10)
+	json := ToJson(slashQueue)
+
+	err := m.monitordb.Put([]byte(dbKey), json)
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to CollectSlashInfo", "electionBlockNumber", electionBlockNumber, "err", err)
+		return
+	}
 }
