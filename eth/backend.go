@@ -20,32 +20,23 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/AppChain-Go/manager"
-	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"math/big"
 	"os"
 	"sync"
 	"sync/atomic"
 
-	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/wal"
-
-	"github.com/PlatONnetwork/AppChain-Go/x/gov"
-
-	"github.com/PlatONnetwork/AppChain-Go/x/handler"
-
-	"github.com/PlatONnetwork/AppChain-Go/core/snapshotdb"
-
-	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/evidence"
-
 	"github.com/PlatONnetwork/AppChain-Go/accounts"
 	"github.com/PlatONnetwork/AppChain-Go/common"
 	"github.com/PlatONnetwork/AppChain-Go/consensus"
 	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft"
+	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/evidence"
 	ctypes "github.com/PlatONnetwork/AppChain-Go/consensus/cbft/types"
 	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/validator"
+	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/wal"
 	"github.com/PlatONnetwork/AppChain-Go/core"
 	"github.com/PlatONnetwork/AppChain-Go/core/bloombits"
 	"github.com/PlatONnetwork/AppChain-Go/core/rawdb"
+	"github.com/PlatONnetwork/AppChain-Go/core/snapshotdb"
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
 	"github.com/PlatONnetwork/AppChain-Go/core/vm"
 	"github.com/PlatONnetwork/AppChain-Go/eth/downloader"
@@ -55,12 +46,16 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/event"
 	"github.com/PlatONnetwork/AppChain-Go/internal/ethapi"
 	"github.com/PlatONnetwork/AppChain-Go/log"
+	"github.com/PlatONnetwork/AppChain-Go/manager"
 	"github.com/PlatONnetwork/AppChain-Go/miner"
+	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"github.com/PlatONnetwork/AppChain-Go/node"
 	"github.com/PlatONnetwork/AppChain-Go/p2p"
 	"github.com/PlatONnetwork/AppChain-Go/p2p/discover"
 	"github.com/PlatONnetwork/AppChain-Go/params"
 	"github.com/PlatONnetwork/AppChain-Go/rpc"
+	"github.com/PlatONnetwork/AppChain-Go/x/gov"
+	"github.com/PlatONnetwork/AppChain-Go/x/handler"
 	xplugin "github.com/PlatONnetwork/AppChain-Go/x/plugin"
 	"github.com/PlatONnetwork/AppChain-Go/x/xcom"
 )
