@@ -873,18 +873,18 @@ func (v ValidatorArray) String() string {
 }
 
 type ValidatorEx struct {
-	ValidatorId *big.Int
+	ValidatorId *big.Int `json:"validatorId"`
 	//NodeAddress common.Address
 	NodeId discover.NodeID `json:"nodeId"`
 	// bls public key
-	BlsPubKey bls.PublicKeyHex
+	BlsPubKey bls.PublicKeyHex `json:"-"`
 	// The account used to initiate the staking
 	StakingAddress common.Address `json:"stakingAddress,omitempty"`
 	// The version of the node process
 	ProgramVersion uint32 `json:"programVersion,omitempty"`
 	// All vons of staking and delegated
 	//Shares *big.Int
-	Shares *hexutil.Big
+	Shares *hexutil.Big `json:"-"`
 	// this is the term of validator in consensus round
 	// [0, N]
 	ValidatorTerm uint32 `json:"validatorTerm,omitempty"`
