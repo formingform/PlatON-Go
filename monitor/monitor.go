@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/AppChain-Go/common"
-	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 	"github.com/PlatONnetwork/AppChain-Go/core/state"
 	"github.com/PlatONnetwork/AppChain-Go/log"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
@@ -323,23 +322,24 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 	validatorExQueue := make(staking.ValidatorExQueue, len(nextValidators.Arr))
 	for k, v := range nextValidators.Arr {
 		validatorExQueue[k] = &staking.ValidatorEx{
-			ValidatorTerm:   v.ValidatorTerm,
-			NodeId:          v.NodeId,
-			StakingBlockNum: v.StakingBlockNum,
-			ProgramVersion:  v.ProgramVersion,
+			ValidatorTerm: v.ValidatorTerm,
+			NodeId:        v.NodeId,
+			//StakingBlockNum: v.StakingBlockNum,
+			ProgramVersion: v.ProgramVersion,
 		}
 		var notInCadidateList = true
 		// 给ValidatorEx补充详细信息
 		for _, cv := range currentCandidate {
 			if cv.NodeId == v.NodeId {
-				validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
+				/*validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
 				validatorExQueue[k].DelegateTotal = cv.DelegateTotal
 				validatorExQueue[k].BenefitAddress = cv.BenefitAddress
 				validatorExQueue[k].StakingAddress = cv.StakingAddress
 				validatorExQueue[k].Website = cv.Website
 				validatorExQueue[k].Description = cv.Description
 				validatorExQueue[k].ExternalId = cv.ExternalId
-				validatorExQueue[k].NodeName = cv.NodeName
+				validatorExQueue[k].NodeName = cv.NodeName*/
+				validatorExQueue[k].StakingAddress = cv.StakingAddress
 				notInCadidateList = false
 				break
 			}
@@ -356,14 +356,15 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 					"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 				log.Debug("Failed get can :", can)
 			} else {
-				validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
+				/*validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
 				validatorExQueue[k].DelegateTotal = (*hexutil.Big)(can.DelegateTotal)
 				validatorExQueue[k].BenefitAddress = can.BenefitAddress
 				validatorExQueue[k].StakingAddress = can.StakingAddress
 				validatorExQueue[k].Website = can.Website
 				validatorExQueue[k].Description = can.Description
 				validatorExQueue[k].ExternalId = can.ExternalId
-				validatorExQueue[k].NodeName = can.NodeName
+				validatorExQueue[k].NodeName = can.NodeName*/
+				validatorExQueue[k].StakingAddress = can.StakingAddress
 				validatorExQueue[k].ProgramVersion = can.ProgramVersion
 			}
 		}
@@ -402,23 +403,24 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 	validatorExQueue := make(staking.ValidatorExQueue, len(verifiers.Arr))
 	for k, v := range verifiers.Arr {
 		validatorExQueue[k] = &staking.ValidatorEx{
-			ValidatorTerm:   v.ValidatorTerm,
-			NodeId:          v.NodeId,
-			StakingBlockNum: v.StakingBlockNum,
-			ProgramVersion:  v.ProgramVersion,
+			ValidatorTerm: v.ValidatorTerm,
+			NodeId:        v.NodeId,
+			//StakingBlockNum: v.StakingBlockNum,
+			ProgramVersion: v.ProgramVersion,
 		}
 		var notInCadidateList = true
 		// 给ValidatorEx补充详细信息
 		for _, cv := range currentCandidate {
 			if cv.NodeId == v.NodeId {
-				validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
+				/*validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
 				validatorExQueue[k].DelegateTotal = cv.DelegateTotal
 				validatorExQueue[k].BenefitAddress = cv.BenefitAddress
 				validatorExQueue[k].StakingAddress = cv.StakingAddress
 				validatorExQueue[k].Website = cv.Website
 				validatorExQueue[k].Description = cv.Description
 				validatorExQueue[k].ExternalId = cv.ExternalId
-				validatorExQueue[k].NodeName = cv.NodeName
+				validatorExQueue[k].NodeName = cv.NodeName*/
+				validatorExQueue[k].StakingAddress = cv.StakingAddress
 				notInCadidateList = false
 				break
 			}
@@ -435,14 +437,15 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 					"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 				log.Debug("Failed get can :", can)
 			} else {
-				validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
+				/*validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
 				validatorExQueue[k].DelegateTotal = (*hexutil.Big)(can.DelegateTotal)
 				validatorExQueue[k].BenefitAddress = can.BenefitAddress
 				validatorExQueue[k].StakingAddress = can.StakingAddress
 				validatorExQueue[k].Website = can.Website
 				validatorExQueue[k].Description = can.Description
 				validatorExQueue[k].ExternalId = can.ExternalId
-				validatorExQueue[k].NodeName = can.NodeName
+				validatorExQueue[k].NodeName = can.NodeName*/
+				validatorExQueue[k].StakingAddress = can.StakingAddress
 				validatorExQueue[k].ProgramVersion = can.ProgramVersion
 			}
 		}

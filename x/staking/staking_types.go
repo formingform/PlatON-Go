@@ -460,13 +460,13 @@ const (
 
 type Description struct {
 	// External Id for the third party to pull the node description (with length limit)
-	ExternalId string
+	ExternalId string `json:"externalId,omitempty"`
 	// The Candidate Node's Name  (with a length limit)
-	NodeName string
+	NodeName string `json:"nodeName,omitempty"`
 	// The third-party home page of the node (with a length limit)
-	Website string
+	Website string `json:"website,omitempty"`
 	// Description of the node (with a length limit)
-	Details string
+	Details string `json:"details,omitempty"`
 }
 
 func (desc *Description) CheckLength() error {
@@ -545,15 +545,15 @@ func (queue CandidateBaseQueue) IsEmpty() bool {
 }*/
 type Validator struct {
 	ValidatorId     *big.Int
-	ProgramVersion  uint32
-	StakingTxIndex  uint32
-	ValidatorTerm   uint32 // Validator's term in the consensus round
-	StakingBlockNum uint64
-	NodeAddress     common.NodeAddress
-	NodeId          discover.NodeID
+	ProgramVersion  uint32             `json:"programVersion,omitempty"`
+	StakingTxIndex  uint32             `json:"-"`
+	ValidatorTerm   uint32             `json:"validatorTerm,omitempty"` // Validator's term in the consensus round
+	StakingBlockNum uint64             `json:"stakingBlockNum,omitempty"`
+	NodeAddress     common.NodeAddress `json:"nodeAddress,omitempty"`
+	NodeId          discover.NodeID    `json:"nodeId"`
 	BlsPubKey       bls.PublicKeyHex
 	Shares          *big.Int
-	StakingAddress  common.Address
+	StakingAddress  common.Address `json:"stakingAddress,omitempty"`
 }
 
 func (val *Validator) String() string {
@@ -875,19 +875,19 @@ func (v ValidatorArray) String() string {
 type ValidatorEx struct {
 	ValidatorId *big.Int
 	//NodeAddress common.Address
-	NodeId discover.NodeID
+	NodeId discover.NodeID `json:"nodeId"`
 	// bls public key
 	BlsPubKey bls.PublicKeyHex
 	// The account used to initiate the staking
-	StakingAddress common.Address
+	StakingAddress common.Address `json:"stakingAddress,omitempty"`
 	// The version of the node process
-	ProgramVersion uint32
+	ProgramVersion uint32 `json:"programVersion,omitempty"`
 	// All vons of staking and delegated
 	//Shares *big.Int
 	Shares *hexutil.Big
 	// this is the term of validator in consensus round
 	// [0, N]
-	ValidatorTerm uint32
+	ValidatorTerm uint32 `json:"validatorTerm,omitempty"`
 }
 
 func (vex *ValidatorEx) String() string {
@@ -956,13 +956,13 @@ func (queue ValArrIndexQueue) String() string {
 // An item that exists for slash
 type SlashNodeItem struct {
 	// the nodeId will be slashed
-	NodeId discover.NodeID
+	NodeId discover.NodeID `json:"nodeId"`
 	// the amount of von with slashed
-	Amount *big.Int
+	Amount *big.Int `json:"amount,omitempty"`
 	// slash type
-	SlashType CandidateStatus
+	SlashType CandidateStatus `json:"slashType,omitempty"`
 	// the benefit adrr who will receive the slash amount of von
-	BenefitAddr common.Address
+	BenefitAddr common.Address `json:"benefitAddr,omitempty"`
 }
 
 func (s *SlashNodeItem) String() string {
