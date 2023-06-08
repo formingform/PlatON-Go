@@ -317,7 +317,7 @@ func (api *MonitorAPI) GetProposalParticipants(proposalID, blockHash common.Hash
 }
 
 // GetImplicitPPOSTx
-func (api *MonitorAPI) GetImplicitPPOSTx(blockNumber uint64) (*ImplicitPPOSTx, error) {
+func (api *MonitorAPI) GetImplicitPPOSTxsByBlockNumber(blockNumber uint64) (*ImplicitPPOSTx, error) {
 	log.Debug("GetImplicitPPOSTx", "blockNumber", blockNumber)
 	dbKey := ImplicitPPOSTxKey.String() + "_" + strconv.FormatUint(blockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))

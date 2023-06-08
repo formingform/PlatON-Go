@@ -20,12 +20,13 @@ package web3ext
 var Modules = map[string]string{
 	"admin":    AdminJs,
 	"debug":    DebugJs,
-	"hskchain":   PlatonJs,
+	"hskchain": PlatonJs,
 	"miner":    MinerJs,
 	"net":      NetJs,
 	"personal": PersonalJs,
 	"rpc":      RpcJs,
 	"txpool":   TxpoolJs,
+	"monitor":  MonitorJs,
 }
 
 const AdminJs = `
@@ -593,6 +594,76 @@ web3._extend({
 				return status;
 			}
 		}),
+	]
+});
+`
+
+const MonitorJs = `
+web3._extend({
+	property: 'monitor',
+	methods: [
+		new web3._extend.Method({
+			name: 'getReceiptExtsByBlockNumber',
+			call: 'monitor_getReceiptExtsByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'removePeer',
+			call: 'admin_removePeer',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getVerifiersByBlockNumber',
+			call: 'monitor_getVerifiersByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getValidatorsByBlockNumber',
+			call: 'monitor_getValidatorsByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getEpochInfoByBlockNumber',
+			call: 'monitor_getEpochInfoByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getSlashInfoByBlockNumber',
+			call: 'monitor_getSlashInfoByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getNodeVersion',
+			call: 'admin_getNodeVersion',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getAccountView',
+			call: 'mointor_getAccountView',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getProposalParticipants',
+			call: 'monitor_getProposalParticipants',
+			params: 2,
+			inputFormatter: [null,null]
+		}),
+		new web3._extend.Method({
+			name: 'getImplicitPPOSTxsByBlockNumber',
+			call: 'monitor_getImplicitPPOSTxsByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),		
+	],
+	properties: [
 	]
 });
 `
