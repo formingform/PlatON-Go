@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package cbfttypes
 
 import (
@@ -23,10 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 	"math"
 	"math/big"
 	"sort"
+	"sync"
+
+	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 
 	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/protocols"
 
@@ -98,11 +99,13 @@ type RemoveValidatorEvent struct {
 type UpdateValidatorEvent struct{}
 
 type ValidateNode struct {
-	Index     uint32             `json:"index"`
-	Address   common.NodeAddress `json:"address"`
-	PubKey    *ecdsa.PublicKey   `json:"-"`
-	NodeID    discover.NodeID    `json:"nodeID"`
-	BlsPubKey *bls.PublicKey     `json:"blsPubKey"`
+	ValidatorId    uint32             `json:"validatorId"`
+	Index          uint32             `json:"index"`
+	Address        common.NodeAddress `json:"address"`
+	PubKey         *ecdsa.PublicKey   `json:"-"`
+	NodeID         discover.NodeID    `json:"nodeID"`
+	BlsPubKey      *bls.PublicKey     `json:"blsPubKey"`
+	StakingAddress common.Address     `json:"stakingAddress"`
 }
 
 type ValidateNodeMap map[discover.NodeID]*ValidateNode
@@ -117,6 +120,7 @@ type Validators struct {
 	Nodes            ValidateNodeMap `json:"validateNodes"`
 	ValidBlockNumber uint64          `json:"validateBlockNumber"`
 
+	mu sync.Mutex
 	sortedNodes SortedValidatorNode
 }
 
@@ -157,6 +161,17 @@ func (vs *Validators) NodeList() []discover.NodeID {
 		nodeList = append(nodeList, id)
 	}
 	return nodeList
+}
+
+func (vs *Validators) ValidatorIdList() []uint32 {
+	if len(vs.sortedNodes) == 0 {
+		vs.sort()
+	}
+	ids := make([]uint32, len(vs.sortedNodes))
+	for i, node := range vs.sortedNodes {
+		ids[i] = node.ValidatorId
+	}
+	return ids
 }
 
 func (vs *Validators) NodeListByIndexes(indexes []uint32) ([]*ValidateNode, error) {
@@ -218,6 +233,15 @@ func (vs *Validators) FindNodeByAddress(addr common.NodeAddress) (*ValidateNode,
 	return nil, errors.New("invalid address")
 }
 
+func (vs *Validators) FindNodeByValidatorId(validatorId uint32) (*ValidateNode, error) {
+	for _, v := range vs.Nodes {
+		if v.ValidatorId == validatorId {
+			return v, nil
+		}
+	}
+	return nil, errors.New("not found the specified validator")
+}
+
 func (vs *Validators) NodeID(idx int) discover.NodeID {
 	if len(vs.sortedNodes) == 0 {
 		vs.sort()
@@ -255,6 +279,13 @@ func (vs *Validators) Equal(rsh *Validators) bool {
 }
 
 func (vs *Validators) sort() {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	if len(vs.sortedNodes) > 0 {
+		return
+	}
+
 	for _, node := range vs.Nodes {
 		vs.sortedNodes = append(vs.sortedNodes, node)
 	}

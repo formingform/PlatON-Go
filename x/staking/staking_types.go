@@ -168,8 +168,13 @@ func (can *Candidate) IsEmpty() bool {
 	return nil == can
 }
 
+func (can *Candidate) OwnerAddress() common.Address {
+	return can.StakingAddress
+}
+
 type CandidateBase struct {
-	NodeId discover.NodeID
+	ValidatorId *big.Int
+	NodeId      discover.NodeID
 	// bls public key
 	BlsPubKey bls.PublicKeyHex
 	// The account used to initiate the staking
@@ -403,57 +408,25 @@ func (can *CandidateMutable) IsInvalidWithdrew() bool {
 
 // Display amount field using 0x hex
 type CandidateHex struct {
-	NodeId               discover.NodeID
-	BlsPubKey            bls.PublicKeyHex
-	StakingAddress       common.Address
-	BenefitAddress       common.Address
-	RewardPer            uint16
-	NextRewardPer        uint16
-	RewardPerChangeEpoch uint32
-	StakingTxIndex       uint32
-	ProgramVersion       uint32
-	Status               CandidateStatus
-	StakingEpoch         uint32
-	StakingBlockNum      uint64
-	Shares               *hexutil.Big
-	Released             *hexutil.Big
-	ReleasedHes          *hexutil.Big
-	RestrictingPlan      *hexutil.Big
-	RestrictingPlanHes   *hexutil.Big
-	DelegateEpoch        uint32
-	DelegateTotal        *hexutil.Big
-	DelegateTotalHes     *hexutil.Big
-	DelegateRewardTotal  *hexutil.Big
-	Description
+	ValidatorId     uint32
+	NodeId          discover.NodeID
+	BlsPubKey       bls.PublicKeyHex
+	StakingAddress  common.Address
+	ProgramVersion  uint32
+	Status          CandidateStatus
+	StakingBlockNum uint64
+	Shares          *hexutil.Big
 }
 
 func (can *CandidateHex) String() string {
-	return fmt.Sprintf(`{"NodeId": "%s","BlsPubKey": "%s","StakingAddress": "%s","BenefitAddress": "%s","RewardPer": "%d","NextRewardPer": "%d","RewardPerChangeEpoch": "%d","StakingTxIndex": %d,"ProgramVersion": %d,"Status": %d,"StakingEpoch": %d,"StakingBlockNum": %d,"Shares": "%s","Released": "%s","ReleasedHes": "%s","RestrictingPlan": "%s","RestrictingPlanHes": "%s","DelegateEpoch": "%d","DelegateTotal": "%s","DelegateTotalHes": "%s","ExternalId": "%s","NodeName": "%s","Website": "%s","Details": "%s","DelegateRewardTotal": "%s"}`,
+	return fmt.Sprintf(`{"NodeId": "%s","BlsPubKey": "%s","StakingAddress": "%s","ProgramVersion": %d,"Status": %d,"StakingBlockNum": %d,"Shares": "%s"}`,
 		fmt.Sprintf("%x", can.NodeId.Bytes()),
 		fmt.Sprintf("%x", can.BlsPubKey.Bytes()),
 		fmt.Sprintf("%x", can.StakingAddress.Bytes()),
-		fmt.Sprintf("%x", can.BenefitAddress.Bytes()),
-		can.RewardPer,
-		can.NextRewardPer,
-		can.RewardPerChangeEpoch,
-		can.StakingTxIndex,
 		can.ProgramVersion,
 		can.Status,
-		can.StakingEpoch,
 		can.StakingBlockNum,
-		can.Shares,
-		can.Released,
-		can.ReleasedHes,
-		can.RestrictingPlan,
-		can.RestrictingPlanHes,
-		can.DelegateEpoch,
-		can.DelegateTotal,
-		can.DelegateTotalHes,
-		can.ExternalId,
-		can.NodeName,
-		can.Website,
-		can.Details,
-		can.DelegateRewardTotal)
+		can.Shares)
 }
 
 func (can *CandidateHex) IsNotEmpty() bool {
@@ -487,13 +460,13 @@ const (
 
 type Description struct {
 	// External Id for the third party to pull the node description (with length limit)
-	ExternalId string `json:"externalId,omitempty"`
+	ExternalId string
 	// The Candidate Node's Name  (with a length limit)
-	NodeName string `json:"nodeName,omitempty"`
+	NodeName string
 	// The third-party home page of the node (with a length limit)
-	Website string `json:"website,omitempty"`
+	Website string
 	// Description of the node (with a length limit)
-	Details string `json:"details,omitempty"`
+	Details string
 }
 
 func (desc *Description) CheckLength() error {
@@ -571,18 +544,20 @@ func (queue CandidateBaseQueue) IsEmpty() bool {
 	ValidatorTerm uint32
 }*/
 type Validator struct {
-	ProgramVersion  uint32             `json:"programVersion,omitempty"`
-	StakingTxIndex  uint32             `json:"-"`
-	ValidatorTerm   uint32             `json:"validatorTerm,omitempty"` // Validator's term in the consensus round
-	StakingBlockNum uint64             `json:"stakingBlockNum,omitempty"`
-	NodeAddress     common.NodeAddress `json:"nodeAddress,omitempty"`
-	NodeId          discover.NodeID    `json:"nodeId"`
+	ValidatorId     *big.Int
+	ProgramVersion  uint32
+	StakingTxIndex  uint32
+	ValidatorTerm   uint32 // Validator's term in the consensus round
+	StakingBlockNum uint64
+	NodeAddress     common.NodeAddress
+	NodeId          discover.NodeID
 	BlsPubKey       bls.PublicKeyHex
 	Shares          *big.Int
+	StakingAddress  common.Address
 }
 
 func (val *Validator) String() string {
-	return fmt.Sprintf(`{"NodeId": "%s","NodeAddress": "%s","BlsPubKey": "%s","ProgramVersion": %d,"Shares": %d,"StakingBlockNum": %d,"StakingTxIndex": %d,"ValidatorTerm": %d}`,
+	return fmt.Sprintf(`{"NodeId": "%s","NodeAddress": "%s","BlsPubKey": "%s","ProgramVersion": %d,"Shares": %d,"StakingBlockNum": %d,"StakingTxIndex": %d,"ValidatorTerm": %d,"stakingAddress": "%s"}`,
 		val.NodeId.String(),
 		fmt.Sprintf("%x", val.NodeAddress.Bytes()),
 		fmt.Sprintf("%x", val.BlsPubKey.Bytes()),
@@ -590,7 +565,8 @@ func (val *Validator) String() string {
 		val.Shares,
 		val.StakingBlockNum,
 		val.StakingTxIndex,
-		val.ValidatorTerm)
+		val.ValidatorTerm,
+		val.StakingAddress)
 }
 
 type ValidatorQueue []*Validator
@@ -885,11 +861,11 @@ func CompareForDel(removes NeedRemoveCans, left, right *Validator) int {
 // some consensus round validators or current epoch validators
 type ValidatorArray struct {
 	// the round start blockNumber or epoch start blockNumber
-	Start uint64 `json:"start"`
+	Start uint64
 	// the round end blockNumber or epoch blockNumber
 	End uint64
 	// the round validators or epoch validators
-	Arr ValidatorQueue `json:"validatorQueue"`
+	Arr ValidatorQueue
 }
 
 func (v ValidatorArray) String() string {
@@ -897,60 +873,30 @@ func (v ValidatorArray) String() string {
 }
 
 type ValidatorEx struct {
+	ValidatorId *big.Int
 	//NodeAddress common.Address
-	NodeId discover.NodeID `json:"nodeId"`
+	NodeId discover.NodeID
 	// bls public key
 	BlsPubKey bls.PublicKeyHex
 	// The account used to initiate the staking
-	StakingAddress common.Address `json:"stakingAddress,omitempty"`
-	// The account receive the block rewards and the staking rewards
-	BenefitAddress common.Address `json:"benefitAddress,omitempty"`
-	// Delegate reward amount percent for current settlement cycle
-	RewardPer uint16
-	// Delegate reward amount percent for next settlement cycle
-	NextRewardPer uint16
-	// Number of settlement cycles when changing the commission reward percentage
-	RewardPerChangeEpoch uint32
-	// The tx index at the time of staking
-	StakingTxIndex uint32
+	StakingAddress common.Address
 	// The version of the node process
-	ProgramVersion uint32 `json:"programVersion,omitempty"`
-	// Block height at the time of staking
-	StakingBlockNum uint64 `json:"stakingBlockNum,omitempty"`
+	ProgramVersion uint32
 	// All vons of staking and delegated
 	//Shares *big.Int
 	Shares *hexutil.Big
-	// Node desc
-	Description
 	// this is the term of validator in consensus round
 	// [0, N]
-	ValidatorTerm uint32 `json:"validatorTerm,omitempty"`
-	// Effective total delegate
-	DelegateTotal *hexutil.Big `json:"delegateTotal,omitempty"`
-
-	DelegateRewardTotal *hexutil.Big `json:"delegateRewardTotal,omitempty"`
+	ValidatorTerm uint32
 }
 
 func (vex *ValidatorEx) String() string {
-	return fmt.Sprintf(`{"NodeId": "%s","NodeAddress": "%s","BlsPubKey": "%s","StakingAddress": "%s","BenefitAddress": "%s","RewardPer": "%d","NextRewardPer": "%d","RewardPerChangeEpoch": "%d","StakingTxIndex": %d,"ProgramVersion": %d,"StakingBlockNum": %d,"Shares": "%s","ExternalId": "%s","NodeName": "%s","Website": "%s","Details": "%s","ValidatorTerm": %d,"DelegateTotal": "%s"}`,
+	return fmt.Sprintf(`{"NodeId": "%s","BlsPubKey": "%s","StakingAddress": "%s","Shares": "%s","ValidatorTerm": %d}`,
 		vex.NodeId.String(),
-		fmt.Sprintf("%x", vex.StakingAddress.Bytes()),
 		fmt.Sprintf("%x", vex.BlsPubKey.Bytes()),
 		fmt.Sprintf("%x", vex.StakingAddress.Bytes()),
-		fmt.Sprintf("%x", vex.BenefitAddress.Bytes()),
-		vex.RewardPer,
-		vex.NextRewardPer,
-		vex.RewardPerChangeEpoch,
-		vex.StakingTxIndex,
-		vex.ProgramVersion,
-		vex.StakingBlockNum,
 		vex.Shares,
-		vex.ExternalId,
-		vex.NodeName,
-		vex.Website,
-		vex.Details,
-		vex.ValidatorTerm,
-		vex.DelegateTotal)
+		vex.ValidatorTerm)
 }
 
 type ValidatorExQueue []*ValidatorEx
@@ -1010,13 +956,13 @@ func (queue ValArrIndexQueue) String() string {
 // An item that exists for slash
 type SlashNodeItem struct {
 	// the nodeId will be slashed
-	NodeId discover.NodeID `json:"nodeId"`
+	NodeId discover.NodeID
 	// the amount of von with slashed
-	Amount *big.Int `json:"amount,omitempty"`
+	Amount *big.Int
 	// slash type
-	SlashType CandidateStatus `json:"slashType,omitempty"`
+	SlashType CandidateStatus
 	// the benefit adrr who will receive the slash amount of von
-	BenefitAddr common.Address `json:"benefitAddr,omitempty"`
+	BenefitAddr common.Address
 }
 
 func (s *SlashNodeItem) String() string {

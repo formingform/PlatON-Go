@@ -18,6 +18,7 @@
 package consensus
 
 import (
+	"github.com/PlatONnetwork/AppChain-Go/rootchain"
 	"time"
 
 	"github.com/PlatONnetwork/AppChain-Go/common"
@@ -174,7 +175,7 @@ type Agency interface {
 type Bft interface {
 	Engine
 
-	Start(chain ChainReader, blockCacheWriter BlockCacheWriter, pool TxPoolReset, agency Agency) error
+	Start(chain ChainReader, blockCacheWriter BlockCacheWriter, pool TxPoolReset, agency Agency, rootChainCheck rootchain.RootChainCheck) error
 
 	// Returns the current consensus node address list.
 	ConsensusNodes() ([]discover.NodeID, error)
@@ -200,4 +201,12 @@ type Bft interface {
 
 	// NodeID is temporary.
 	NodeID() discover.NodeID
+
+	BlsSign(msg []byte) ([]byte, error)
+
+	IsCurrentValidator() (*cbfttypes.ValidateNode, error)
+
+	IsCurrentProposer() bool
+
+	CurrentProposer() *cbfttypes.ValidateNode
 }

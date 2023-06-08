@@ -35,6 +35,7 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/consensus/cbft/wal"
 	"github.com/PlatONnetwork/AppChain-Go/core"
 	"github.com/PlatONnetwork/AppChain-Go/core/bloombits"
+	"github.com/PlatONnetwork/AppChain-Go/core/cbfttypes"
 	"github.com/PlatONnetwork/AppChain-Go/core/rawdb"
 	"github.com/PlatONnetwork/AppChain-Go/core/snapshotdb"
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
@@ -53,6 +54,8 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/p2p"
 	"github.com/PlatONnetwork/AppChain-Go/p2p/discover"
 	"github.com/PlatONnetwork/AppChain-Go/params"
+	"github.com/PlatONnetwork/AppChain-Go/processor"
+	"github.com/PlatONnetwork/AppChain-Go/rootchain"
 	"github.com/PlatONnetwork/AppChain-Go/rpc"
 	"github.com/PlatONnetwork/AppChain-Go/x/gov"
 	"github.com/PlatONnetwork/AppChain-Go/x/handler"
@@ -91,6 +94,8 @@ type Ethereum struct {
 
 	lock           sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 	managerAccount *manager.ManagerAccount
+
+	checkpointProcessor *processor.CheckpointProcessor
 }
 
 // New creates a new Ethereum object (including the
@@ -315,8 +320,24 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("The gasFloor must be less than gasCeil, got: %d, expect range (0, %d]", config.Miner.GasFloor, gasCeil)
 	}
 
+	// Initialisation of the event management object handling the root chain
+	currentState, err := blockChainCache.StateAt(currentBlock.Root())
+	if err != nil {
+		log.Error("Failed to restore status tree", "blockNumber", currentBlock.Number(), "root", currentBlock.Root())
+		return nil, errors.New("failed to restore status tree")
+	}
+	rootEventManager := rootchain.NewEventManager(currentState, chainDb, config.RCConfig)
+
+	//todo init root chain
+	rootChain, err := rootchain.NewRootChain(blockChainCache, rootEventManager)
+	if err != nil {
+		log.Error("create root chain failed", "error", err)
+		return nil, errors.New("failed to create root chain")
+	}
+	rootChain.Start()
+
 	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), minningConfig, eth.EventMux(), eth.engine,
-		eth.isLocalBlock, blockChainCache, config.VmTimeoutDuration, eth.managerAccount)
+		eth.isLocalBlock, blockChainCache, config.VmTimeoutDuration, eth.managerAccount, rootChain)
 
 	reactor := core.NewBlockChainReactor(eth.EventMux(), eth.blockchain.Config().ChainID)
 	node.GetCryptoHandler().SetPrivateKey(stack.Config().NodeKey())
@@ -355,10 +376,39 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 			return nil, errors.New("Failed to recover SnapshotDB")
 		}
 
-		if err := engine.Start(eth.blockchain, blockChainCache, eth.txPool, agency); err != nil {
+		if err := engine.Start(eth.blockchain, blockChainCache, eth.txPool, agency, rootChain); err != nil {
 			log.Error("Init cbft consensus engine fail", "error", err)
 			return nil, errors.New("Failed to init cbft consensus engine")
 		}
+	}
+
+	if config.RCConfig.PlatonRPCAddr != "" {
+		filterAPI := filters.NewPublicFilterAPI(eth.APIBackend, false)
+		platonAPI := ethapi.NewPublicBlockChainAPI(eth.APIBackend)
+
+		rootchainConnector, err := processor.NewRootchainConnector(config.RCConfig.PlatonRPCAddr, config.RCConfig.RootChainAddress)
+		if err != nil {
+			log.Error("Creating rootchain connector fail", "err", err)
+			return nil, errors.New("Failed to create rootchain connector")
+		}
+
+		checkpointProcessor, err := processor.NewCheckpointProcessor(
+			eth.blockchain,
+			config.Genesis.Config.ChainID,
+			eth.engine.(consensus.Bft),
+			eth.APIBackend,
+			filterAPI,
+			platonAPI,
+			rootchainConnector,
+			eth.managerAccount,
+			rootEventManager,
+			eth.eventMux.Subscribe(cbfttypes.CbftResult{}))
+		if err != nil {
+			log.Error("Creating checkpoint processor fail", "err", err)
+			return nil, errors.New("Failed to create checkpoint processor")
+		}
+
+		eth.checkpointProcessor = checkpointProcessor
 	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
@@ -461,7 +511,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   xplugin.NewPublicPPOSAPI(),
+			Service:   xplugin.NewPublicPPOSAPI(s.APIBackend),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
@@ -626,6 +676,9 @@ func (s *Ethereum) Stop() error {
 	s.blockchain.Stop()
 	s.engine.Close()
 	core.GetReactorInstance().Close()
+	if s.checkpointProcessor != nil {
+		s.checkpointProcessor.Stop()
+	}
 	s.chainDb.Close()
 	s.eventMux.Stop()
 	return nil

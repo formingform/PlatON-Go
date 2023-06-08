@@ -20,7 +20,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	vm2 "github.com/PlatONnetwork/AppChain-Go/common/vm"
+	"github.com/PlatONnetwork/AppChain-Go/innerbindings/helper"
 	"github.com/PlatONnetwork/AppChain-Go/manager"
+	"github.com/PlatONnetwork/AppChain-Go/rootchain"
 	"math/big"
 	"runtime"
 	"sort"
@@ -58,9 +61,11 @@ type environment struct {
 	tcount  int           // tx count in cycle
 	gasPool *core.GasPool // available gas used to pack transactions
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
+	header         *types.Header
+	txs            []*types.Transaction
+	receipts       []*types.Receipt
+	stateSyncExtra []byte
+	stakeSyncTx    *types.Transaction
 }
 
 func (evm *environment) RevertToDBSnapshot(snapshotDBID, stateDBID int) {
@@ -203,12 +208,13 @@ type worker struct {
 
 	vmTimeout uint64
 
-	managerAccount *manager.ManagerAccount
+	managerAccount  *manager.ManagerAccount
+	rootChainReader rootchain.RootChainReader
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, miningConfig *core.MiningConfig, engine consensus.Engine,
 	eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool,
-	blockChainCache *core.BlockChainCache, vmTimeout uint64, managerAccount *manager.ManagerAccount) *worker {
+	blockChainCache *core.BlockChainCache, vmTimeout uint64, managerAccount *manager.ManagerAccount, rootChainReader rootchain.RootChainReader) *worker {
 
 	worker := &worker{
 		config:             config,
@@ -236,6 +242,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, miningConfig *co
 		commitWorkEnv:      &commitWorkEnv{},
 		vmTimeout:          vmTimeout,
 		managerAccount:     managerAccount,
+		rootChainReader:    rootChainReader,
 	}
 	// Subscribe NewTxsEvent for tx pool
 	// worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -764,17 +771,48 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	if err != nil {
 		return err
 	}
-	env := &environment{
-		signer:     types.MakeSigner(w.chainConfig, gov.Gte120VersionState(state), gov.Gte140VersionState(state)),
-		snapshotDB: snapshotdb.Instance(),
-		state:      state,
-		header:     header,
+	stakeSyncTx, stakeSyncExtra, err := w.createStakeStateSyncTx(state)
+	if err != nil {
+		return err
 	}
-
+	env := &environment{
+		signer:         types.MakeSigner(w.chainConfig, gov.Gte120VersionState(state), gov.Gte140VersionState(state)),
+		snapshotDB:     snapshotdb.Instance(),
+		state:          state,
+		header:         header,
+		stateSyncExtra: stakeSyncExtra,
+		stakeSyncTx:    stakeSyncTx,
+	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
 	w.current = env
 	return nil
+}
+
+func (w *worker) createStakeStateSyncTx(state *state.StateDB) (*types.Transaction, []byte, error) {
+	start := new(big.Int).SetBytes(state.GetState(vm2.StakingContractAddr, vm.BlockNumberKey))
+	logs, end, err := w.rootChainReader.GetStakeLogs(start.Add(start, big.NewInt(1)), 1000)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(logs) == 0 {
+		return nil, types.EncodeStakeExtra(big.NewInt(0)), nil
+	}
+
+	data, err := helper.EncodeStakeStateSync(end, logs)
+	if err != nil {
+		return nil, nil, err
+	}
+	nonce := w.managerAccount.Nonce()
+	tx := types.NewTransaction(nonce, vm2.StakingContractAddr, nil, 1800000, big.NewInt(0), data)
+	tx, err = w.managerAccount.Sign(tx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	stakeSyncExtra := types.EncodeStakeExtra(end)
+	log.Debug("event packing for rootChain successful", "eventStartBlockNumber", start, "eventEndBlockNumber", end,
+		"logsSize", len(logs), "txHash", tx.Hash().Hex())
+	return tx, stakeSyncExtra, nil
 }
 
 // updateSnapshot updates pending snapshot block and state.
@@ -985,7 +1023,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64, 
 		Time:       uint64(timestamp),
 	}
 
-	log.Info("Cbft begin to consensus for new block", "number", header.Number, "nonce", hexutil.Encode(header.Nonce[:]), "gasLimit", header.GasLimit, "parentHash", parent.Hash(), "parentNumber", parent.NumberU64(), "parentStateRoot", parent.Root(), "timestamp", common.MillisToString(timestamp))
+	log.Info("Cbft begin to consensus for new block", "number", header.Number, "nonce", hexutil.Encode(header.Nonce[:]), "gasLimit", header.GasLimit,
+		"parentHash", parent.Hash(), "parentNumber", parent.NumberU64(), "parentStateRoot", parent.Root(),
+		"timestamp", common.MillisToString(timestamp), "deadline", blockDeadline)
 	// Initialize the header extra in Prepare function of engine
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for mining", "err", err)
@@ -1002,6 +1042,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64, 
 	extraData := w.makeExtraData()
 	copy(header.Extra[:len(extraData)], extraData)
 
+	copy(header.Extra[types.ExtraStakePos:types.ExtraStakePos+32], w.current.stateSyncExtra)
 	// BeginBlocker()
 	if err := core.GetReactorInstance().BeginBlocker(header, w.current.state); nil != err {
 		log.Error("Failed to GetReactorInstance BeginBlocker on worker", "blockNumber", header.Number, "err", err)
@@ -1045,6 +1086,17 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64, 
 		return err
 	}
 
+	// Set the transaction to a pending state for the submitted event and wait for it to be packaged.
+	if w.current.stakeSyncTx != nil {
+		// If there are transactions with synchronised events,
+		// it means that an account for sending special transactions has been configured and there are events that need to be synchronised.
+		txs := pending[w.managerAccount.Address()]
+		if txs == nil {
+			txs = make(types.Transactions, 0)
+		}
+		txs = append(txs, w.current.stakeSyncTx)
+		pending[w.managerAccount.Address()] = txs
+	}
 	log.Debug("Fetch pending transactions success", "number", header.Number, "pendingLength", len(pending), "time", common.PrettyDuration(time.Since(startTime)))
 
 	// Short circuit if there is no available pending transactions
@@ -1090,19 +1142,28 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64, 
 	var localTimeout = false
 	tempContractCache := make(map[common.Address]struct{})
 
-	//todo add inner contract txs
-	if w.managerAccount != nil {
-		//create tx
-		//var stakeTx *types.Transaction
-		ownerTxs := localTxs[w.managerAccount.Address()]
-		sort.Sort(types.TxByNonce(ownerTxs))
+	// Adding transactions for built-in contracts.
+	// Priority packaging of transactions for special accounts.
+	if w.managerAccount != nil && w.current.stakeSyncTx != nil {
+		// If account is not added to local, then you need to filter for presence in remote.
+		specialTxs := make(types.Transactions, 0)
+		if txs, ok := localTxs[w.managerAccount.Address()]; ok {
+			specialTxs = append(specialTxs, txs...)
+		}
+		if txs, ok := remoteTxs[w.managerAccount.Address()]; ok {
+			specialTxs = append(specialTxs, txs...)
+		}
+		sort.Sort(types.TxByNonce(specialTxs))
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, map[common.Address]types.Transactions{
-			w.managerAccount.Address(): ownerTxs,
+			w.managerAccount.Address(): specialTxs,
 		})
 		if failed, _ := w.committer.CommitTransactions(header, txs, interrupt, timestamp, blockDeadline, tempContractCache); failed {
 			return fmt.Errorf("commit transactions error")
 		}
 		delete(localTxs, w.managerAccount.Address())
+		delete(remoteTxs, w.managerAccount.Address())
+		log.Debug("worker successfully executes special transactions", "blockNumber", header.Number, "extra", hex.EncodeToString(header.Extra),
+			"specialAccount", w.managerAccount.Address().Hex(), "specialTxs", len(specialTxs), "locals", len(localTxs), "remotes", len(remoteTxs))
 	}
 
 	if len(localTxs) > 0 {
@@ -1119,6 +1180,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64, 
 
 	startTime = time.Now()
 	if !localTimeout && len(remoteTxs) > 0 {
+		// TODO 过滤外部发送的to地址为：Staking合约
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
 
 		if failed, _ := w.committer.CommitTransactions(header, txs, interrupt, timestamp, blockDeadline, tempContractCache); failed {
