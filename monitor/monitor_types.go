@@ -17,7 +17,7 @@ type Intf_stakingPlugin interface {
 	GetCurrValList(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetVerifierArray(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetCandidateList(common.Hash, uint64) (staking.CandidateHexQueue, error)
-	GetCandidateInfo(common.Hash, common.NodeAddress) (*staking.Candidate, error)
+	GetCandidateInfo(common.Hash, *big.Int) (*staking.Candidate, error)
 	GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error)
 	GetGetDelegationLockCompactInfo(blockHash common.Hash, blockNumber uint64, delAddr common.Address) (*staking.DelegationLockHex, error)
 }

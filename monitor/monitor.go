@@ -313,61 +313,10 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 		return
 	}
 
-	//获取所有质押节点（包含详细信息，25中的提出退出节点，不再存在此列表中）
-	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
+	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, nextValidators)
 	if nil != err {
-		log.Error("Failed to GetCandidateList", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
-	}
-	validatorExQueue := make(staking.ValidatorExQueue, len(nextValidators.Arr))
-	for k, v := range nextValidators.Arr {
-		validatorExQueue[k] = &staking.ValidatorEx{
-			ValidatorTerm: v.ValidatorTerm,
-			NodeId:        v.NodeId,
-			//StakingBlockNum: v.StakingBlockNum,
-			ProgramVersion: v.ProgramVersion,
-		}
-		var notInCadidateList = true
-		// 给ValidatorEx补充详细信息
-		for _, cv := range currentCandidate {
-			if cv.NodeId == v.NodeId {
-				/*validatorExQueue[k].DelegateRewardTotal = cv.DelegateRewardTotal
-				validatorExQueue[k].DelegateTotal = cv.DelegateTotal
-				validatorExQueue[k].BenefitAddress = cv.BenefitAddress
-				validatorExQueue[k].StakingAddress = cv.StakingAddress
-				validatorExQueue[k].Website = cv.Website
-				validatorExQueue[k].Description = cv.Description
-				validatorExQueue[k].ExternalId = cv.ExternalId
-				validatorExQueue[k].NodeName = cv.NodeName*/
-				validatorExQueue[k].StakingAddress = cv.StakingAddress
-				notInCadidateList = false
-				break
-			}
-		}
-		if notInCadidateList {
-			// 不在currentCandidate的verifier，需要额外补充详细信息
-			nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
-			if nil != err {
-				log.Error("Failed to NodeId2Addr: parse current nodeId is failed", "err", err)
-			}
-			can, err := m.stakingPlugin.GetCandidateInfo(blockHash, nodeIdAddr)
-			if err != nil || can == nil {
-				log.Error("Failed to Query Current Round candidate info on stakingPlugin Confirmed When Settletmetn block",
-					"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
-				log.Debug("Failed get can :", can)
-			} else {
-				/*validatorExQueue[k].DelegateRewardTotal = (*hexutil.Big)(can.DelegateRewardTotal)
-				validatorExQueue[k].DelegateTotal = (*hexutil.Big)(can.DelegateTotal)
-				validatorExQueue[k].BenefitAddress = can.BenefitAddress
-				validatorExQueue[k].StakingAddress = can.StakingAddress
-				validatorExQueue[k].Website = can.Website
-				validatorExQueue[k].Description = can.Description
-				validatorExQueue[k].ExternalId = can.ExternalId
-				validatorExQueue[k].NodeName = can.NodeName*/
-				validatorExQueue[k].StakingAddress = can.StakingAddress
-				validatorExQueue[k].ProgramVersion = can.ProgramVersion
-			}
-		}
 	}
 	json := ToJson(validatorExQueue)
 
@@ -378,7 +327,7 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
-	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	log.Debug("success to CollectNextEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
 	return
 }
 
@@ -393,20 +342,40 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	//获取所有质押节点（包含详细信息，201中的提出退出节点，不再存在此列表中）
-	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
+	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, verifiers)
 	if nil != err {
-		log.Error("Failed to Query Current Round candidate on stakingPlugin Confirmed When Settletmetn block",
-			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		log.Error("failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	validatorExQueue := make(staking.ValidatorExQueue, len(verifiers.Arr))
-	for k, v := range verifiers.Arr {
+	json := ToJson(validatorExQueue)
+
+	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
+	if blockNumber == 1 {
+		nextEpoch = 1
+	}
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("success to CollectNextEpochVerifiers", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	return
+}
+
+func (m *Monitor) convertToValidatorExQueue(blockHash common.Hash, blockNumber uint64, validatorList *staking.ValidatorArray) (staking.ValidatorExQueue, error) {
+	//获取所有质押节点（包含详细信息，25中的提出退出节点，不再存在此列表中）
+	currentCandidate, err := m.stakingPlugin.GetCandidateList(blockHash, blockNumber)
+	if nil != err {
+		log.Error("Failed to GetCandidateList", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return nil, err
+	}
+	validatorExQueue := make(staking.ValidatorExQueue, len(validatorList.Arr))
+	for k, v := range validatorList.Arr {
 		validatorExQueue[k] = &staking.ValidatorEx{
 			ValidatorTerm: v.ValidatorTerm,
 			NodeId:        v.NodeId,
 			//StakingBlockNum: v.StakingBlockNum,
 			ProgramVersion: v.ProgramVersion,
+			ValidatorId:    v.ValidatorId,
+			StakingAddress: v.StakingAddress,
 		}
 		var notInCadidateList = true
 		// 给ValidatorEx补充详细信息
@@ -420,14 +389,15 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 				validatorExQueue[k].Description = cv.Description
 				validatorExQueue[k].ExternalId = cv.ExternalId
 				validatorExQueue[k].NodeName = cv.NodeName*/
-				validatorExQueue[k].StakingAddress = cv.StakingAddress
+				//validatorExQueue[k].StakingAddress = cv.StakingAddress
 				notInCadidateList = false
 				break
 			}
 		}
 		if notInCadidateList {
 			// 不在currentCandidate的verifier，需要额外补充详细信息
-			nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
+			//nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
+			nodeIdAddr := v.ValidatorId
 			if nil != err {
 				log.Error("Failed to NodeId2Addr: parse current nodeId is failed", "err", err)
 			}
@@ -450,17 +420,7 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			}
 		}
 	}
-	json := ToJson(validatorExQueue)
-
-	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
-	if blockNumber == 1 {
-		nextEpoch = 1
-	}
-	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
-
-	m.monitordb.Put([]byte(dbKey), json)
-	log.Debug("wow,insert verifier history", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
-	return
+	return validatorExQueue, nil
 }
 
 // 收集隐式的ppos交易数据
