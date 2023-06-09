@@ -270,29 +270,25 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 		DelegationLockedItems:                   make([]DelegationLockedItem, 0),
 	}
 	// 设置锁仓金
-	_, info, err := MonitorInstance().restrictingPlugin.MustGetRestrictingInfoByDecode(state, account)
-	if err != nil {
-		log.Error("fail to MustGetRestrictingInfoByDecode", "account", account.String(), "err", err)
-		return nil, err
+	_, restrictingInfo, err := MonitorInstance().restrictingPlugin.MustGetRestrictingInfoByDecode(state, account)
+	if err == nil && &restrictingInfo != nil {
+		accountView.RestrictingPlanLockedAmount = restrictingInfo.CachePlanAmount
+		accountView.RestrictingPlanPledgeAmount = restrictingInfo.AdvanceAmount
 	}
-	accountView.RestrictingPlanLockedAmount = info.CachePlanAmount
-	accountView.RestrictingPlanPledgeAmount = info.AdvanceAmount
 
 	// 设置委托锁定金
-	locks, err2 := MonitorInstance().stakingPlugin.GetGetDelegationLockCompactInfo(blockHash, blockNumber, account)
-	if err2 != nil {
-		log.Error("fail to GetGetDelegationLockCompactInfo", "account", account.String(), "err", err2)
-		return nil, err2
-	}
-	accountView.DelegationUnLockedFreeBalance = locks.Released.ToInt()
-	accountView.DelegationUnLockedRestrictingPlanAmount = locks.RestrictingPlan.ToInt()
-	for _, lock := range locks.Locks {
-		lockItem := DelegationLockedItem{
-			ExpiredEpoch:          lock.Epoch,
-			FreeBalance:           lock.Released.ToInt(),
-			RestrictingPlanAmount: lock.RestrictingPlan.ToInt(),
+	delegationLocks, err2 := MonitorInstance().stakingPlugin.GetGetDelegationLockCompactInfo(blockHash, blockNumber, account)
+	if err2 == nil && delegationLocks != nil {
+		accountView.DelegationUnLockedFreeBalance = delegationLocks.Released.ToInt()
+		accountView.DelegationUnLockedRestrictingPlanAmount = delegationLocks.RestrictingPlan.ToInt()
+		for _, lock := range delegationLocks.Locks {
+			lockItem := DelegationLockedItem{
+				ExpiredEpoch:          lock.Epoch,
+				FreeBalance:           lock.Released.ToInt(),
+				RestrictingPlanAmount: lock.RestrictingPlan.ToInt(),
+			}
+			accountView.DelegationLockedItems = append(accountView.DelegationLockedItems, lockItem)
 		}
-		accountView.DelegationLockedItems = append(accountView.DelegationLockedItems, lockItem)
 	}
 	return accountView, nil
 }
