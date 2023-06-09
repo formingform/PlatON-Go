@@ -652,9 +652,7 @@ web3._extend({
 		}),
 		new web3._extend.Method({
 			name: 'getNodeVersion',
-			call: 'admin_getNodeVersion',
-			params: 1,
-			inputFormatter: [null]
+			call: 'admin_getNodeVersion'
 		}),
 		new web3._extend.Method({
 			name: 'getAccountView',
