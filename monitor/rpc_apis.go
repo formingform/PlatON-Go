@@ -31,6 +31,8 @@ import (
 }*/
 
 type Backend interface {
+	CurrentHeader() *types.Header
+	CurrentBlock() *types.Block
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
@@ -231,9 +233,9 @@ func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) *st
 	return &slashQueue
 }
 
-// GetNodeVersion 链上获取当前的节点版本
-func (api *MonitorAPI) GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error) {
-	return MonitorInstance().stakingPlugin.GetNodeVersion(blockHash)
+// GetNodeVersion 链上获取当前的所有质押节点版本
+func (api *MonitorAPI) GetNodeVersion() (staking.ValidatorExQueue, error) {
+	return MonitorInstance().stakingPlugin.GetNodeVersion(api.b.CurrentHeader().Hash())
 }
 
 // GetAccountView 链上获取帐号的当前信息，包括：余额，锁仓，委托等
