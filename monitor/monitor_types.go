@@ -96,3 +96,10 @@ type DelegationLockedItem struct {
 	//处于锁定期的委托金，资金来源是锁仓计划
 	RestrictingPlanAmount *big.Int `json:"restrictingPlanAmount,omitempty"`
 }
+
+type ProposalParticipants struct {
+	AccuVerifierAccount uint64 `json:"accuVerifierAccount,omitempty"` //累计验证人数量（去重后）
+	Yeas                uint64 `json:"yeas,omitempty"`                //赞成数
+	Nays                uint64 `json:"nays,omitempty"`                //反对数
+	Abstentions         uint64 `json:"abstentions,omitempty"`         //弃权数
+}
