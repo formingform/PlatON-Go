@@ -656,7 +656,7 @@ web3._extend({
 		}),
 		new web3._extend.Method({
 			name: 'getAccountView',
-			call: 'mointor_getAccountView',
+			call: 'monitor_getAccountView',
 			params: 1,
 			inputFormatter: [null]
 		}),
