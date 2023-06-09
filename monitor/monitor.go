@@ -303,6 +303,30 @@ func (m *Monitor) CollectionNextEpochInfo(epoch uint64, newBlockReward, epochTot
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("CollectionNextEpochInfo", "data", string(json))
 }
+func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
+	curValidators, err := m.stakingPlugin.GetCurrValList(blockHash, blockNumber, queryStartNotIrr)
+	if nil != err {
+		log.Error("Failed to CollectInitEpochValidators", "blockNumber", blockHash, "blockHash", blockNumber, "err", err)
+		return
+	}
+
+	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, curValidators)
+	if nil != err {
+		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
+	}
+	json := ToJson(validatorExQueue)
+
+	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
+	if blockNumber == 1 {
+		nextEpoch = 1
+	}
+	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("success to CollectInitEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	return
+}
 
 // CollectNextEpochValidators 在上个epoch的结束块高上，收集新的validator名单（25名单，包含详细信息）
 // epoch轮数从1开始，key的组成是：ValidatorsOfEpochKey+每个epoch轮的开始块高
@@ -328,6 +352,32 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("success to CollectNextEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
+	return
+}
+
+func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
+	//获取201名单（只包含必要信息）
+	verifiers, err := m.stakingPlugin.GetVerifierArray(blockHash, blockNumber, queryStartNotIrr)
+	if nil != err {
+		log.Error("Failed to Query Current Round verifiers on stakingPlugin Confirmed When Settletmetn block",
+			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
+	}
+	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, verifiers)
+	if nil != err {
+		log.Error("failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		return
+	}
+	json := ToJson(validatorExQueue)
+
+	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
+	if blockNumber == 1 {
+		nextEpoch = 1
+	}
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("success to CollectInitVerifiers", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
 	return
 }
 

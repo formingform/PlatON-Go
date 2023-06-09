@@ -342,8 +342,8 @@ func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, s
 func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) error {
 	//当区块=1时，要把当前的（内置）的共识节点保存到本地db以备后续查询
 	if block.NumberU64() == uint64(1) {
-		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
-		monitor.MonitorInstance().CollectNextEpochVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+		monitor.MonitorInstance().CollectInitValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+		monitor.MonitorInstance().CollectInitVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 	}
 	if xutil.IsEndOfEpoch(block.NumberU64()) {
 		//当eoch结束时，要把先前20个区块选出的下一轮共识节点，保存到本地db以备后续查询
