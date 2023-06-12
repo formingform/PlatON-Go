@@ -34,9 +34,10 @@ func TestGetReceiptExt(t *testing.T) {
 	t.Logf("dataReward:%s", string(ToJson(fields)))
 }
 func TestAccountView(t *testing.T) {
+	balance, _ := new(big.Int).SetString("20000000000000000000000000000", 10)
 	accountView := &AccountView{
 		Account:     common.Address{0x1},
-		FreeBalance: new(big.Int).SetUint64(uint64(491292)),
+		FreeBalance: balance,
 		// 锁仓锁定的余额
 		RestrictingPlanLockedAmount: new(big.Int).SetUint64(uint64(491292)),
 		// 锁仓欠释放的余额
