@@ -17,12 +17,15 @@
 package vm
 
 import (
+	"bytes"
 	"encoding/hex"
 	"github.com/PlatONnetwork/AppChain-Go/common"
+	"github.com/PlatONnetwork/AppChain-Go/common/byteutil"
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
 	"github.com/PlatONnetwork/AppChain-Go/log"
 	"github.com/PlatONnetwork/AppChain-Go/monitor"
 	"github.com/PlatONnetwork/AppChain-Go/params"
+	"github.com/PlatONnetwork/AppChain-Go/rlp"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -715,7 +718,39 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	callContext.contract.Gas += returnGas
 
 	if IsPlatONPrecompiledContract(toAddr, false) {
-		monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
+		//从args分析出fnCode，从ret分析出执行结果
+		//然后根据需要记录关注的交易和结果
+		if len(args) > 0 {
+			var input [][]byte
+			err0 := rlp.Decode(bytes.NewReader(args), &input)
+
+			if nil != err0 {
+				log.Error("Failed to Verify PlatON inner contract tx data, Decode rlp input failed", "err", err0)
+			} else {
+				for _, arg := range input {
+					log.Warn("invoke inner contract", "contract", toAddr.Hex(), "arg", arg)
+				}
+				fnCode := byteutil.BytesToUint16(input[0])
+				switch fnCode {
+				case 1000: //CreateStaking
+				case 2003: //vote proposal
+				}
+			}
+			//当err是BizError时，返回的[]byte是，string(BizError.Code)；如果是普通error，则返回的[]byte是nil
+			if err != nil {
+				if len(ret) == 0 {
+					//调用合约的运行时error
+				} else {
+					//合约的bizError
+					//bizErrorCode := string(ret)
+				}
+			} else {
+				//如果用户合约中，两次调用内置合约，第一次成功，第二次失败，那么第一次成功的状态会回滚吗；
+				//或者内置合约调用成给，后续执行用户合约逻辑失败，那么内置合约的状态会回滚吗？
+				monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
+			}
+		}
+
 	}
 
 	return ret, nil
