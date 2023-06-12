@@ -305,8 +305,10 @@ func (gc *GovContract) vote(verifier discover.NodeID, proposalID common.Hash, op
 	v.VoteNodeID = verifier
 	v.VoteOption = option
 
+	//err可能是BizError，也可能是普通error
 	err := gov.Vote(from, v, blockHash, blockNumber, programVersion, programVersionSign, plugin.StakingInstance(), gc.Evm.StateDB)
 
+	//当err是BizError时，返回的[]byte是，string(BizError.Code)；如果是普通error，则返回的[]byte是nil
 	return gc.nonCallHandler("vote", Vote, err)
 }
 
