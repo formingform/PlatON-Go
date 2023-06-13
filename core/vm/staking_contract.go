@@ -82,10 +82,7 @@ type StakingContract struct {
 }
 
 func (stkc *StakingContract) RequiredGas(input []byte) uint64 {
-	if checkInputEmpty(input) {
-		return 0
-	}
-	return params.StakingGas
+	return 0
 }
 
 func (stkc *StakingContract) Run(input []byte) ([]byte, error) {
@@ -102,6 +99,16 @@ func (stkc *StakingContract) Run(input []byte) ([]byte, error) {
 	return execPlatonContract(input, stkc.FnSigns())
 }
 
+func (stkc *StakingContract) SolidityFunc() map[uint32]func([]byte) ([]byte, error) {
+	return map[uint32]func([]byte) ([]byte, error){
+		binary.BigEndian.Uint32(helper.InnerStakeAbi.Methods[helper.StakeStateSync].ID): stkc.stakeStateSync,
+		binary.BigEndian.Uint32(helper.InnerStakeAbi.Methods[helper.BlockNumber].ID): func(i []byte) ([]byte, error) {
+			value := stkc.blockNumber()
+			return value, nil
+		},
+	}
+}
+
 func (stkc *StakingContract) CheckGasPrice(gasPrice *big.Int, fcode uint16) error {
 	return nil
 }
@@ -114,13 +121,6 @@ func (stkc *StakingContract) stakeInfoFunc() map[common.Hash]func(*types.Log) ([
 	}
 }
 func (stkc *StakingContract) handleStaked(vLog *types.Log) ([]byte, error) {
-	event := new(stakinginfo.StakinginfoStaked)
-	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.Staked, vLog); err != nil {
-		return nil, err
-	}
-	log.Debug("staked event information", "signer", event.Signer.Hex(), "validatorId", event.ValidatorId, "nonce", event.Nonce,
-		"activationEpoch", event.ActivationEpoch, "amount", event.Amount, "totalStakedAmount", event.Total, "signerPubkey", hex.EncodeToString(event.SignerPubkey))
-
 	txHash := stkc.Evm.StateDB.TxHash()
 	txIndex := stkc.Evm.StateDB.TxIdx()
 	blockNumber := stkc.Evm.Context.BlockNumber
@@ -128,16 +128,20 @@ func (stkc *StakingContract) handleStaked(vLog *types.Log) ([]byte, error) {
 	from := stkc.Contract.CallerAddress
 	state := stkc.Evm.StateDB
 
+	event := new(stakinginfo.StakinginfoStaked)
+	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.Staked, vLog); err != nil {
+		return nil, err
+	}
+	log.Debug("StakingOperation: staked event information", "blockNumber", blockNumber, "txHash", txHash.Hex(),
+		"signer", event.Signer.Hex(), "validatorId", event.ValidatorId, "nonce", event.Nonce,
+		"activationEpoch", event.ActivationEpoch, "amount", event.Amount, "totalStakedAmount", event.Total,
+		"signerPubkey", hex.EncodeToString(event.Pubkeys[:64]), "blsPubkey", hex.EncodeToString(event.Pubkeys[64:]))
+
 	// Query current active version
 	originVersion := params.GenesisVersion
 
-	var blskeyBytes []byte
 	var blsPubKey bls.PublicKeyHex
-	blsPubKey.UnmarshalText(blskeyBytes)
-	/*blsPubKey, err := blsPubKeyHex.ParseBlsPubKey()
-	if err != nil {
-		return nil, err
-	}*/
+	copy(blsPubKey[:], event.Pubkeys[64:])
 
 	canOld, err := stkc.Plugin.GetCandidateInfo(blockHash, event.ValidatorId)
 	if snapshotdb.NonDbNotFoundErr(err) {
@@ -158,7 +162,7 @@ func (stkc *StakingContract) handleStaked(vLog *types.Log) ([]byte, error) {
 	init candidate info
 	*/
 
-	nodeId, err := discover.BytesID(event.SignerPubkey)
+	nodeId, err := discover.BytesID(event.Pubkeys[:64])
 	if err != nil {
 		return txResultHandler(vm.StakingContractAddr, stkc.Evm, "createStaking",
 			"invalid public key",
@@ -168,7 +172,7 @@ func (stkc *StakingContract) handleStaked(vLog *types.Log) ([]byte, error) {
 		ValidatorId:     event.ValidatorId,
 		NodeId:          nodeId,
 		BlsPubKey:       blsPubKey,
-		StakingAddress:  from,
+		StakingAddress:  event.Owner,
 		BenefitAddress:  from,
 		StakingBlockNum: blockNumber.Uint64(),
 		StakingTxIndex:  txIndex,
@@ -191,46 +195,48 @@ func (stkc *StakingContract) handleStaked(vLog *types.Log) ([]byte, error) {
 	can.CandidateMutable = canMutable
 
 	err = stkc.Plugin.CreateCandidate(state, blockHash, blockNumber, event.ValidatorId, can)
-	return nil, nil
+	return nil, err
 }
 func (stkc *StakingContract) handleUnstakeInit(vLog *types.Log) ([]byte, error) {
 	event := new(stakinginfo.StakinginfoUnstakeInit)
-	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.Staked, vLog); err != nil {
+	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.UnstakeInit, vLog); err != nil {
 		return nil, err
 	}
 	return nil, nil
 }
 func (stkc *StakingContract) handleSignerChange(vLog *types.Log) ([]byte, error) {
 	event := new(stakinginfo.StakinginfoSignerChange)
-	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.Staked, vLog); err != nil {
+	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.SignerChange, vLog); err != nil {
 		return nil, err
 	}
 	return nil, nil
 }
 func (stkc *StakingContract) handleStakeUpdate(vLog *types.Log) ([]byte, error) {
 	event := new(stakinginfo.StakinginfoStakeUpdate)
-	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.Staked, vLog); err != nil {
+	if err := helper.UnpackLog(helper.StakingInfoAbi, event, helper.StakeUpdate, vLog); err != nil {
 		return nil, err
 	}
 	txHash := stkc.Evm.StateDB.TxHash()
 	blockNumber := stkc.Evm.Context.BlockNumber
 	blockHash := stkc.Evm.Context.BlockHash
 	state := stkc.Evm.StateDB
+	log.Debug("StakingOperation: stakeUpdate event information", "blockNumber", blockNumber, "txHash", txHash.Hex(),
+		"validatorId", event.ValidatorId, "newAmount", event.NewAmount, "nonce", event.Nonce)
 
 	canOld, err := stkc.Plugin.GetCandidateInfo(blockHash, event.ValidatorId)
 	if snapshotdb.NonDbNotFoundErr(err) {
-		log.Error("Failed to createStaking by GetCandidateInfo", "txHash", txHash,
+		log.Error("Failed to update stakeInfo by GetCandidateInfo", "txHash", txHash,
 			"blockNumber", blockNumber, "validatorId", event.ValidatorId, "err", err)
 		return nil, err
 	}
 
-	if canOld.IsNotEmpty() {
-		return txResultHandler(vm.StakingContractAddr, stkc.Evm, "createStaking",
+	if canOld.IsEmpty() {
+		return txResultHandler(vm.StakingContractAddr, stkc.Evm, "stakeUpdate",
 			"can is not nil",
-			TxCreateStaking, staking.ErrCanAlreadyExist)
+			TxEditorCandidate, staking.ErrCanNoExist)
 	}
-	stkc.Plugin.StakeUpdate(state, blockHash, blockNumber, event.ValidatorId, event.NewAmount, canOld)
-	return nil, nil
+	err = stkc.Plugin.StakeUpdate(state, blockHash, blockNumber, event.ValidatorId, event.NewAmount, canOld)
+	return nil, err
 }
 
 func (stkc *StakingContract) stakeStateSync(input []byte) ([]byte, error) {
@@ -293,17 +299,6 @@ func (stkc *StakingContract) SetBlockNumber(number *big.Int) error {
 func (stkc *StakingContract) blockNumber() []byte {
 	value := stkc.Evm.StateDB.GetState(vm.StakingContractAddr, BlockNumberKey)
 	return value
-}
-
-func (stkc *StakingContract) SolidityFunc() map[uint32]func([]byte) ([]byte, error) {
-	return map[uint32]func([]byte) ([]byte, error){
-
-		binary.BigEndian.Uint32(helper.InnerStakeAbi.Methods[helper.StakeStateSync].ID): stkc.stakeStateSync,
-		binary.BigEndian.Uint32(helper.InnerStakeAbi.Methods[helper.BlockNumber].ID): func(i []byte) ([]byte, error) {
-			value := stkc.blockNumber()
-			return value, nil
-		},
-	}
 }
 
 func (stkc *StakingContract) FnSigns() map[uint16]interface{} {

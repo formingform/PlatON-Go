@@ -44,7 +44,7 @@ func NewEventManager(stateDB vm.StateDB, db ethdb.Database, rcConfig *config.Roo
 		blockLogs:       make(map[uint64][]*types.Log, 0),
 	}
 	if start.Uint64() > 0 {
-		eventManager.fromBlockNumber = start.Uint64()
+		eventManager.fromBlockNumber = start.Uint64() + 1
 	}
 	return eventManager
 }
@@ -117,8 +117,9 @@ func (em *EventManager) Listen() error {
 			for _, log := range logs {
 				// checkpoint events are not stored and are notified directly to the special handling logic.
 				// feed.Send()
+				tmplog := log
 				if log.Topics[0] == helper.NewHeaderBlockID {
-					em.checkpointEventFeed.Send(log)
+					em.checkpointEventFeed.Send(&tmplog)
 					continue
 				}
 
@@ -163,6 +164,7 @@ func (bnl BlockNumberListSort) Swap(i, j int) {
 func (em *EventManager) BuildEventList(startBlockNumber uint64, endBlockNumber uint64, limit uint64) (*big.Int, []*types.Log, error) {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
+	logList := make([]*types.Log, 0)
 	if endBlockNumber == 0 {
 		// If it is the node that is out of the block, that logic is taken.
 		// Calculate the cut-off block height for packing events based on the estimated inter-node synchronization block delay.
@@ -172,12 +174,12 @@ func (em *EventManager) BuildEventList(startBlockNumber uint64, endBlockNumber u
 	}
 	if startBlockNumber > em.fromBlockNumber {
 		log.Warn("starting block height is greater than the latest height listened to", "startBlockNumber", startBlockNumber, "latestHeight", em.fromBlockNumber-1)
-		return nil, nil, nil
+		return nil, logList, nil
 	}
 	if endBlockNumber >= em.fromBlockNumber || endBlockNumber < startBlockNumber {
 		log.Debug("Not enough events", "startBlockNumber", startBlockNumber, "latestHeight", em.fromBlockNumber-1,
 			"backNumbers", em.RCConfig.DelayNumbers, "endBlockNumber", endBlockNumber)
-		return nil, nil, nil
+		return nil, logList, nil
 	}
 	blockNumberList := make(BlockNumberListSort, 0)
 	for blockNumber := range em.blockLogs {
@@ -186,7 +188,6 @@ func (em *EventManager) BuildEventList(startBlockNumber uint64, endBlockNumber u
 		}
 	}
 	sort.Sort(&blockNumberList)
-	logList := make([]*types.Log, 0)
 	for _, blockNumber := range blockNumberList {
 		logs := em.blockLogs[blockNumber]
 		logList = append(logList, logs...)

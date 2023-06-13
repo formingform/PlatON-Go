@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -43,7 +44,7 @@ type Checkpoint struct {
 	RootHash    common.Hash    `json:"rootHash"`
 	AccountHash common.Hash    `json:"accountHash"`
 	ChainId     *big.Int       `json:"chainId"`
-	Current     []*big.Int     `json:"-"`
+	Current     []*big.Int     `json:"current"`
 	Rewards     []*big.Int     `json:"-"`
 	Slashing    []*big.Int     `json:"-"`
 }
@@ -85,5 +86,13 @@ func (cp *Checkpoint) Pack() []byte {
 }
 
 func (cp *Checkpoint) Equal(other *Checkpoint) bool {
-	return reflect.DeepEqual(cp, other)
+	return bytes.Equal(cp.Proposer.Bytes(), other.Proposer.Bytes()) &&
+		cp.Start.Cmp(other.Start) == 0 &&
+		cp.End.Cmp(other.End) == 0 &&
+		bytes.Equal(cp.RootHash.Bytes(), other.RootHash.Bytes()) &&
+		bytes.Equal(cp.AccountHash.Bytes(), other.AccountHash.Bytes()) &&
+		cp.ChainId.Cmp(other.ChainId) == 0 &&
+		reflect.DeepEqual(cp.Current, other.Current) &&
+		reflect.DeepEqual(cp.Rewards, other.Rewards) &&
+		reflect.DeepEqual(cp.Slashing, other.Slashing)
 }
