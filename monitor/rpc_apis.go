@@ -201,21 +201,23 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 		return nil, nil
 	}
 
-	if epoch > 2 {
-		dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch-1, 10)
-		data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
-		if nil != err {
-			log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch-1, "err", err)
-			return nil, err
-		}
-		if len(data) > 0 { //len(nil)==0
-			var curView *EpochView
-			ParseJson(data, curView)
+	view.NextPackageReward = common.Big0
+	view.NextStakingReward = common.Big0
 
-			view.CurPackageReward = curView.PackageReward
-			view.CurStakingReward = curView.StakingReward
-		}
+	nextDbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch+1, 10)
+	nextData, nextErr := MonitorInstance().monitordb.Get([]byte(nextDbKey))
+	if nil != nextErr {
+		log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch+1, "err", err)
+		return &view, nil
 	}
+	if len(nextData) > 0 { //len(nil)==0
+		var nextView *EpochView
+		ParseJson(data, nextView)
+
+		view.NextPackageReward = nextView.PackageReward
+		view.NextStakingReward = nextView.StakingReward
+	}
+
 	return &view, nil
 }
 
