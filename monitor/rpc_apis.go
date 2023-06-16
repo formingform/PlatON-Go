@@ -218,8 +218,8 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 		return &view, nil
 	}
 	if len(nextData) > 0 { //len(nil)==0
-		var nextView *EpochView
-		ParseJson(data, nextView)
+		var nextView EpochView
+		ParseJson(data, &nextView)
 
 		view.NextPackageReward = nextView.PackageReward
 		view.NextStakingReward = nextView.StakingReward
