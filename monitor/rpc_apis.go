@@ -6,7 +6,6 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/common/hexutil"
 	"github.com/PlatONnetwork/AppChain-Go/core/types"
 	"github.com/PlatONnetwork/AppChain-Go/log"
-	"github.com/PlatONnetwork/AppChain-Go/rlp"
 	"github.com/PlatONnetwork/AppChain-Go/rpc"
 	"github.com/PlatONnetwork/AppChain-Go/x/gov"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
@@ -155,6 +154,9 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.V
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("fail to GetVerifiersByBlockNumber", "blockNumber", blockNumber, "err", err)
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -176,6 +178,9 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) (*staking.
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("fail to GetValidatorsByBlockNumber", "blockNumber", blockNumber, "err", err)
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if len(data) == 0 { //len(nil)==0
@@ -196,6 +201,9 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch, "err", err)
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if len(data) == 0 { //len(nil)==0
@@ -215,6 +223,9 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 	nextData, nextErr := MonitorInstance().monitordb.Get([]byte(nextDbKey))
 	if nil != nextErr {
 		log.Error("fail to GetEpochInfoByBlockNumber", "blockNumber", blockNumber, "epoch", epoch+1, "err", err)
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return &view, nil
 	}
 	if len(nextData) > 0 { //len(nil)==0
@@ -233,13 +244,13 @@ func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) (*s
 	dbKey := SlashKey.String() + "_" + strconv.FormatUint(electionBlockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var slashQueue staking.SlashQueue
-	err = rlp.DecodeBytes(data, &slashQueue)
-	if nil != err {
-		return nil, err
-	}
+	ParseJson(data, &slashQueue)
 	return &slashQueue, nil
 }
 
@@ -337,6 +348,9 @@ func (api *MonitorAPI) GetImplicitPPOSTxsByBlockNumber(blockNumber uint64) (*Imp
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("fail to GetImplicitPPOSTxsByBlockNumber", "err", err)
+		if err == ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 
