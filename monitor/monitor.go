@@ -420,12 +420,11 @@ func (m *Monitor) convertToValidatorExQueue(blockHash common.Hash, blockNumber u
 	validatorExQueue := make(staking.ValidatorExQueue, len(validatorList.Arr))
 	for k, v := range validatorList.Arr {
 		validatorExQueue[k] = &staking.ValidatorEx{
-			ValidatorTerm: v.ValidatorTerm,
-			NodeId:        v.NodeId,
-			//StakingBlockNum: v.StakingBlockNum,
-			ProgramVersion: v.ProgramVersion,
-			ValidatorId:    v.ValidatorId,
-			StakingAddress: v.StakingAddress,
+			ValidatorTerm:   v.ValidatorTerm,
+			NodeId:          v.NodeId,
+			StakingBlockNum: v.StakingBlockNum,
+			ProgramVersion:  v.ProgramVersion,
+			ValidatorId:     v.ValidatorId,
 		}
 		var notInCadidateList = true
 		// 给ValidatorEx补充详细信息
