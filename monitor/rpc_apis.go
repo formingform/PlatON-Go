@@ -55,6 +55,7 @@ func NewMonitorAPIs(b Backend) []rpc.API {
 
 // GetReceiptExtsByBlockNumber returns the transaction receipt for the given block number.
 func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[string]interface{}, error) {
+	log.Debug("GetReceiptExtsByBlockNumber", "blockNumber", blockNumber)
 	blockNr := rpc.BlockNumber(blockNumber)
 	block, err := api.b.BlockByNumber(nil, blockNr)
 	if block == nil || err != nil {
@@ -146,6 +147,7 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 }
 
 func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
+	log.Debug("GetVerifiersByBlockNumber", "blockNumber", blockNumber)
 	// epoch starts from 1
 	epoch := xutil.CalculateEpoch(blockNumber)
 	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch, 10)
@@ -166,6 +168,7 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.V
 }
 
 func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
+	log.Debug("GetValidatorsByBlockNumber", "blockNumber", blockNumber)
 	// epoch starts from 1
 	epoch := xutil.CalculateEpoch(blockNumber)
 	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(epoch, 10)
@@ -184,7 +187,11 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) (*staking.
 }
 
 func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView, error) {
-	epoch := xutil.CalculateEpoch(blockNumber)
+	log.Debug("GetEpochInfoByBlockNumber", "blockNumber", blockNumber)
+	var epoch = uint64(1)
+	if blockNumber > 0 {
+		epoch = xutil.CalculateEpoch(blockNumber)
+	}
 	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(epoch, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
@@ -222,6 +229,7 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 }
 
 func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) (*staking.SlashQueue, error) {
+	log.Debug("GetSlashInfoByBlockNumber", "blockNumber", electionBlockNumber)
 	dbKey := SlashKey.String() + "_" + strconv.FormatUint(electionBlockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
@@ -242,6 +250,7 @@ func (api *MonitorAPI) GetNodeVersion() (staking.ValidatorExQueue, error) {
 
 // GetAccountView 链上获取帐号的当前信息，包括：余额，锁仓，委托等
 func (api *MonitorAPI) GetAccountView(accounts []common.Address) []*AccountView {
+	log.Debug("GetAccountView", "accounts", ToJson(accounts))
 	response := make([]*AccountView, len(accounts))
 	header, _ := api.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
 
@@ -297,6 +306,7 @@ func getAccountView(account common.Address, state xcom.StateDB, blockHash common
 
 // GetProposalParticipants 获取提案到此区块为止的投票情况，包括：累计投票人数，赞成、反对，弃权的人数
 func (api *MonitorAPI) GetProposalParticipants(proposalID, blockHash common.Hash) (*ProposalParticipants, error) {
+	log.Debug("GetProposalParticipants", "proposalID", proposalID.Hex(), "blockHash", blockHash.Hex())
 	proposalParticipants := &ProposalParticipants{0, 0, 0, 0}
 	proposal, err := gov.GetProposal(proposalID, monitor.statedb)
 	if err != nil {
