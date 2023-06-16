@@ -249,6 +249,10 @@ func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) (*s
 		}
 		return nil, err
 	}
+
+	if len(data) == 0 { //len(nil)==0
+		return nil, nil
+	}
 	var slashQueue staking.SlashQueue
 	ParseJson(data, &slashQueue)
 	return &slashQueue, nil
