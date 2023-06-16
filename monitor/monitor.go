@@ -310,6 +310,8 @@ func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint6
 		return
 	}
 
+	log.Debug("CollectInitValidators:", "size", len(curValidators.Arr), "data:", ToJson(curValidators))
+
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, curValidators)
 	if nil != err {
 		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
@@ -336,7 +338,7 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 		log.Error("Failed to CollectNextEpochValidators", "blockNumber", blockHash, "blockHash", blockNumber, "err", err)
 		return
 	}
-
+	log.Debug("CollectNextEpochValidators:", "size", len(nextValidators.Arr), "data:", ToJson(nextValidators))
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, nextValidators)
 	if nil != err {
 		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
@@ -363,6 +365,8 @@ func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
+
+	log.Debug("CollectInitVerifiers:", "size", len(verifiers.Arr), "data:", ToJson(verifiers))
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, verifiers)
 	if nil != err {
 		log.Error("failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
@@ -392,6 +396,7 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
+	log.Debug("CollectNextEpochVerifiers:", "size", len(verifiers.Arr), "data:", ToJson(verifiers))
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, verifiers)
 	if nil != err {
 		log.Error("failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
