@@ -346,14 +346,14 @@ func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) e
 		monitor.MonitorInstance().CollectInitVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 	}
 	if xutil.IsEndOfEpoch(block.NumberU64()) {
-		//当eoch结束时，要把先前20个区块选出的下一轮共识节点，保存到本地db以备后续查询
-		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
-
 		//当是end of epoch时，保存201名单
 		monitor.MonitorInstance().CollectNextEpochVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 	}
 
 	if xutil.IsElection(block.NumberU64()) {
+		//当eoch结束时，要把先前20个区块选出的下一轮共识节点，保存到本地db以备后续查询
+		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+
 		// 新的名单选出后，直接以[startBlock, endBlock]为区间的key，存储在snapshot db中。
 		// 不需要有切换验证人的动作，只需要根据块高去查询，即可以获取某个块高对应的验证人节点列表
 		next, err := sk.getNextValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
