@@ -163,6 +163,8 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.V
 	if len(data) == 0 { //len(nil)==0
 		return nil, err
 	}
+	log.Debug("GetValidatorsByBlockNumber result", "blockNumber", blockNumber, "data:", string(data))
+
 	var validatorExQueue staking.ValidatorExQueue
 	ParseJson(data, &validatorExQueue)
 
@@ -186,6 +188,8 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) (*staking.
 	if len(data) == 0 { //len(nil)==0
 		return nil, nil
 	}
+
+	log.Debug("GetValidatorsByBlockNumber result", "blockNumber", blockNumber, "data:", string(data))
 	var validators staking.ValidatorExQueue
 	ParseJson(data, &validators)
 	return &validators, nil
@@ -209,6 +213,8 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 	if len(data) == 0 { //len(nil)==0
 		return nil, nil
 	}
+	log.Debug("GetEpochInfoByBlockNumber result", "blockNumber", blockNumber, "epoch", epoch, "data:", string(data))
+
 	var view EpochView
 	ParseJson(data, &view)
 
@@ -229,6 +235,9 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 		return &view, nil
 	}
 	if len(nextData) > 0 { //len(nil)==0
+
+		log.Debug("GetEpochInfoByBlockNumber result", "blockNumber", blockNumber, "nextEpoch", epoch+1, "nextData:", string(nextData))
+
 		var nextView EpochView
 		ParseJson(data, &nextView)
 
@@ -361,6 +370,9 @@ func (api *MonitorAPI) GetImplicitPPOSTxsByBlockNumber(blockNumber uint64) (*Imp
 	if len(data) == 0 { //len(nil)==0
 		return nil, nil
 	}
+
+	log.Debug("GetImplicitPPOSTxsByBlockNumber result", "blockNumber", blockNumber, "data:", string(data))
+
 	var implicitPPOSTx ImplicitPPOSTx
 	ParseJson(data, &implicitPPOSTx)
 	return &implicitPPOSTx, nil
