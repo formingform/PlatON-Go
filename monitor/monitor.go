@@ -310,11 +310,14 @@ func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint6
 		return
 	}
 
-	log.Debug("CollectInitValidators:", "size", len(curValidators.Arr), "data:", ToJson(curValidators))
+	log.Info("CollectInitValidators:", "blockNumber", blockNumber, "size", len(curValidators.Arr))
+	for idx, item := range curValidators.Arr {
+		log.Info("CollectInitValidators:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
+	}
 
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, curValidators)
 	if nil != err {
-		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		log.Error("Failed to convertToValidatorExQueue", "blockNumber", blockNumber, "blockHash", blockHash.Hex(), "err", err)
 		return
 	}
 	json := ToJson(validatorExQueue)
@@ -335,13 +338,17 @@ func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint6
 func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber uint64, queryStartNotIrr bool) {
 	nextValidators, err := m.stakingPlugin.GetNextValList(blockHash, blockNumber, queryStartNotIrr)
 	if nil != err {
-		log.Error("Failed to CollectNextEpochValidators", "blockNumber", blockHash, "blockHash", blockNumber, "err", err)
+		log.Error("Failed to CollectNextEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.Hex(), "err", err)
 		return
 	}
-	log.Debug("CollectNextEpochValidators:", "size", len(nextValidators.Arr), "data:", ToJson(nextValidators))
+	log.Info("CollectNextEpochValidators:", "blockNumber", blockNumber, "size", len(nextValidators.Arr))
+	for idx, item := range nextValidators.Arr {
+		log.Info("CollectNextEpochValidators:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
+	}
+
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, nextValidators)
 	if nil != err {
-		log.Error("Failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		log.Error("Failed to convertToValidatorExQueue", "blockNumber", blockNumber, "blockHash", blockHash.Hex(), "err", err)
 		return
 	}
 	json := ToJson(validatorExQueue)
@@ -364,6 +371,11 @@ func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64
 		log.Error("Failed to Query Current Round verifiers on stakingPlugin Confirmed When Settletmetn block",
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
+	}
+
+	log.Info("CollectInitVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
+	for idx, item := range verifiers.Arr {
+		log.Info("CollectInitVerifiers:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}
 
 	log.Debug("CollectInitVerifiers:", "size", len(verifiers.Arr), "data:", ToJson(verifiers))
@@ -396,10 +408,14 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	log.Debug("CollectNextEpochVerifiers:", "size", len(verifiers.Arr), "data:", ToJson(verifiers))
+	log.Info("CollectNextEpochVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
+	for idx, item := range verifiers.Arr {
+		log.Info("CollectNextEpochVerifiers:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
+	}
+
 	validatorExQueue, err := m.convertToValidatorExQueue(blockHash, blockNumber, verifiers)
 	if nil != err {
-		log.Error("failed to convertToValidatorExQueue", "blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
+		log.Error("failed to convertToValidatorExQueue", "blockNumber", blockNumber, "blockHash", blockHash.Hex(), "err", err)
 		return
 	}
 	json := ToJson(validatorExQueue)
