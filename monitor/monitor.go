@@ -5,6 +5,7 @@ import (
 	"github.com/PlatONnetwork/AppChain-Go/core/state"
 	"github.com/PlatONnetwork/AppChain-Go/log"
 	"github.com/PlatONnetwork/AppChain-Go/x/staking"
+	"github.com/PlatONnetwork/AppChain-Go/x/xcom"
 	"github.com/PlatONnetwork/AppChain-Go/x/xutil"
 	"math/big"
 	"strconv"
@@ -322,11 +323,7 @@ func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint6
 	}
 	json := ToJson(validatorExQueue)
 
-	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
-	if blockNumber == 1 {
-		nextEpoch = 1
-	}
-	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(0, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("success to CollectInitEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
@@ -353,11 +350,7 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 	}
 	json := ToJson(validatorExQueue)
 
-	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
-	if blockNumber == 1 {
-		nextEpoch = 1
-	}
-	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(blockNumber+xcom.ElectionDistance(), 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("success to CollectNextEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
@@ -386,11 +379,7 @@ func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64
 	}
 	json := ToJson(validatorExQueue)
 
-	nextEpoch := xutil.CalculateEpoch(blockNumber) + 1
-	if blockNumber == 1 {
-		nextEpoch = 1
-	}
-	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(nextEpoch, 10)
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(0, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("success to CollectInitVerifiers", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
