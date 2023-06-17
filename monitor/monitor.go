@@ -379,7 +379,7 @@ func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64
 	}
 	json := ToJson(validatorExQueue)
 
-	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(0, 10)
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(1, 10)
 
 	m.monitordb.Put([]byte(dbKey), json)
 	log.Debug("success to CollectInitVerifiers", "blockNumber", blockNumber, "blockHash", blockHash.String(), "dbKey", dbKey)
@@ -397,7 +397,7 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	log.Info("CollectNextEpochVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
+	log.Debug("CollectNextEpochVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
 	for idx, item := range verifiers.Arr {
 		log.Info("CollectNextEpochVerifiers:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}

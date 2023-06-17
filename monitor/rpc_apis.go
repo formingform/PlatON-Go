@@ -146,16 +146,9 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 }
 
 func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
-
 	// epoch starts from 1
-
-	epoch := uint64(0)
-	if blockNumber != epoch {
-		epoch = xutil.CalculateEpoch(blockNumber)
-	}
-
-	queryNumber := epoch * xutil.CalcBlocksEachEpoch()
-	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(queryNumber, 10)
+	epoch := xutil.CalculateEpoch(blockNumber)
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch, 10)
 	log.Debug("GetVerifiersByBlockNumber", "blockNumber", blockNumber, "dbKey", dbKey)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
@@ -179,7 +172,6 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.V
 }
 
 func (api *MonitorAPI) GetValidatorsByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
-
 	// epoch starts from 1
 	round := uint64(0)
 	if blockNumber != round {
