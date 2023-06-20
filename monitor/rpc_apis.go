@@ -145,10 +145,11 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 	return queue, nil
 }
 
+// 获取区块所在epoch为key的verifiers，这个和scan-agent也是匹配的，scan-agent中，输入的就是上epoch的最后一个块
 func (api *MonitorAPI) GetVerifiersByBlockNumber(blockNumber uint64) (*staking.ValidatorExQueue, error) {
 	// epoch starts from 1
 	epoch := xutil.CalculateEpoch(blockNumber)
-	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch+1, 10)
+	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch, 10)
 	log.Debug("GetVerifiersByBlockNumber", "blockNumber", blockNumber, "dbKey", dbKey)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
