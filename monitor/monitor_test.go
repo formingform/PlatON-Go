@@ -18,9 +18,9 @@ func TestCollectEmbedTransfer(t *testing.T) {
 	to := common.Address{0x02}
 	amount := big.NewInt(1999)
 
-	CollectEmbedTransfer(blockNumber, txHash, from, to, amount)
+	MonitorInstance().CollectEmbedTransfer(blockNumber, txHash, from, to, amount)
 
-	txs := GetEmbedTransfer(blockNumber, txHash)
+	txs := MonitorInstance().GetEmbedTransfer(blockNumber, txHash)
 	json := common.ToJson(txs)
 	fmt.Println("txs=", string(json))
 }

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
@@ -16,11 +17,24 @@ const (
 	SuicidedContractKey
 	ProxyPatternKey
 	proxyPatternMapKey
+	ImplicitPPOSTxKey
 )
 
+// 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
+func (dbKey MonitorDbKey) String() string {
+	return [...]string{
+		"EmbedTransferKey",
+		"CreatedContractKey",
+		"SuicidedContractKey",
+		"ProxyPatternKey",
+		"proxyPatternMapKey",
+		"ImplicitPPOSTxKey",
+	}[dbKey]
+}
+
 type Monitor struct {
-	statedb  *state.StateDB
-	montordb *monitorDB
+	statedb   *state.StateDB
+	monitordb *monitorDB
 }
 
 var (
@@ -30,7 +44,7 @@ var (
 
 func InitMonitor(statedb *state.StateDB) {
 	onceMonitor.Do(func() {
-		monitor = &Monitor{statedb: statedb, montordb: monitorDBInstance()}
+		monitor = &Monitor{statedb: statedb, monitordb: monitorDBInstance()}
 	})
 }
 
@@ -38,22 +52,14 @@ func MonitorInstance() *Monitor {
 	return monitor
 }
 
-// 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
-func (dbKey MonitorDbKey) String() string {
-	return [...]string{"EmbedTransferTx", "CreatedContractKey", "SuicidedContractKey", "ProxyPatternKey", "proxyPatternMapKey"}[dbKey]
-}
-
-type EmbedTransfer struct {
-	TxHash common.Hash    `json:"txHash,-"`
-	From   common.Address `json:"from,omitempty"`
-	To     common.Address `json:"to,omitempty"`
-	Amount *big.Int       `json:"amount,omitempty"`
-}
-
-type ProxyPattern struct {
-	Proxy          *ContractInfo `json:"proxy,omitempty"`
-	Implementation *ContractInfo `json:"implementation,omitempty"`
-}
+/*type ProxyInfo struct {
+	Proxy            common.Address `json:"proxy,omitempty"`
+	Implementation   common.Address `json:"implementation,omitempty"`
+	TokenName        string         `json:"tokenName,omitempty"`
+	TokenSymbol      string         `json:"tokenSymbol,omitempty"`
+	TokenDecimals    uint8          `json:"tokenDecimals,omitempty"`
+	TokenTotalSupply *big.Int       `json:"tokenTotalSupply,omitempty"`
+}*/
 
 func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
 	log.Debug("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
@@ -99,10 +105,6 @@ func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*Em
 	return embedTransferList
 }
 
-type ContractRef interface {
-	Address() common.Address
-}
-
 func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
 	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(common.ToJson(contractInfo)))
 
@@ -120,8 +122,9 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 	json := common.ToJson(createdContractInfoList)
 	if len(json) > 0 {
 		monitorDBInstance().Put([]byte(dbKey), json)
-		log.Debug("save created contracts success")
+
 	}
+	log.Debug("CollectCreatedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
 
 }
 
@@ -137,11 +140,13 @@ func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.H
 	var createdContractInfoList []*ContractInfo
 	common.ParseJson(data, &createdContractInfoList)
 
-	log.Debug("get created contracts success")
+	log.Debug("GetCreatedContract success", "txHash", txHash.Hex(), "json", string(data))
 	return createdContractInfoList
 }
 
 func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
+	log.Debug("CollectSuicidedContractInfo", "txHash", txHash.Hex(), "suicidedContractAddr", suicidedContractAddr.Hex())
+
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := monitorDBInstance().Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -160,9 +165,8 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 	json := common.ToJson(suicidedContractInfoList)
 	if len(json) > 0 {
 		monitorDBInstance().Put([]byte(dbKey), json)
-		log.Debug("save suicided contracts success")
 	}
-
+	log.Debug("CollectSuicidedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
@@ -177,14 +181,39 @@ func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.
 	var suicidedContractInfoList []*ContractInfo
 	common.ParseJson(data, &suicidedContractInfoList)
 
-	log.Debug("get suicided contracts success")
+	log.Debug("GetSuicidedContract success", "txHash", txHash.Hex(), "json", string(data))
 	return suicidedContractInfoList
 }
 
 // CollectProxyPattern 根据交易txHash发现代理关系
 func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
+	// 检查是否发现过此代理关系
+	// === to save the proxy map to local db
+	dbMapKey := proxyPatternMapKey.String()
+	data, err := monitorDBInstance().Get([]byte(dbMapKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load proxy map", "err", err)
+		return
+	}
+
+	var proxyPatternMap = make(map[common.Address]common.Address)
+	common.ParseJson(data, &proxyPatternMap)
+
+	if _, exist := proxyPatternMap[proxyContractInfo.Address]; exist {
+		return
+	}
+
+	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
+
+	json := common.ToJson(proxyPatternMap)
+	if len(json) > 0 {
+		monitorDBInstance().Put([]byte(dbMapKey), json)
+	}
+	log.Debug("CollectProxyPattern save proxy relation flag success", "txHash", txHash.Hex(), "json", string(json))
+
+	// 收集当前当前交易发现的代理关系
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err = monitorDBInstance().Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return
@@ -194,30 +223,11 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	common.ParseJson(data, &proxyPatternList)
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
-	json := common.ToJson(proxyPatternList)
+	json = common.ToJson(proxyPatternList)
 	if len(json) > 0 {
 		monitorDBInstance().Put([]byte(dbKey), json)
-		log.Debug("save proxy patterns success")
 	}
-
-	// === to save the proxy map to local db
-
-	dbMapKey := proxyPatternMapKey.String()
-	data, err = monitorDBInstance().Get([]byte(dbMapKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy map", "err", err)
-		return
-	}
-
-	var proxyPatternMap = make(map[common.Address]common.Address)
-	common.ParseJson(data, &proxyPatternMap)
-	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
-
-	json = common.ToJson(proxyPatternMap)
-	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbMapKey), json)
-		log.Debug("save proxy map success")
-	}
+	log.Debug("CollectProxyPattern success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) IsProxied(self, target common.Address) bool {
@@ -250,6 +260,51 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 	var proxyPatternList []*ProxyPattern
 	common.ParseJson(data, &proxyPatternList)
 
-	log.Debug("get proxy patterns success")
+	log.Debug("GetProxyPatternList success", "txHash", txHash.Hex(), "json", string(data))
 	return proxyPatternList
+}
+
+// 收集隐式的ppos交易数据
+// 新方式（暂时未启用
+func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input, result []byte) {
+	log.Debug("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Hex(), "to", to.Hex(), "input", hexutil.Encode(input), "result", hexutil.Encode(result))
+
+	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
+	data, err := monitorDBInstance().Get([]byte(dbKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load data from local db", "err", err)
+		return
+	}
+
+	var implicitPPOSTx *ImplicitPPOSTx
+	if len(data) == 0 {
+		implicitPPOSTx = &ImplicitPPOSTx{PPOSTxMap: make(map[common.Hash][]*PPOSTx)}
+	} else {
+		common.ParseJson(data, &implicitPPOSTx)
+	}
+	contractTx := &PPOSTx{From: from, To: to, Input: input, Result: result}
+	implicitPPOSTx.PPOSTxMap[txHash] = append(implicitPPOSTx.PPOSTxMap[txHash], contractTx)
+	json := common.ToJson(implicitPPOSTx)
+	if len(json) > 0 {
+		m.monitordb.Put([]byte(dbKey), json)
+	}
+	log.Debug("CollectImplicitPPOSTx success", "txHash", txHash.Hex(), "json", string(json))
+}
+
+// 收集隐式的ppos交易数据
+func (m *Monitor) GetImplicitPPOSTx(blockNumber uint64, txHash common.Hash) []*ImplicitPPOSTx {
+	log.Debug("GetImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.Hex())
+
+	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
+	data, err := monitorDBInstance().Get([]byte(dbKey))
+	if nil != err && err != ErrNotFound {
+		log.Error("failed to load data from local db", "err", err)
+		return nil
+	}
+
+	var implicitPPOSTxList []*ImplicitPPOSTx
+	common.ParseJson(data, &implicitPPOSTxList)
+
+	log.Debug("GetImplicitPPOSTx success", "txHash", txHash.Hex(), "json", string(data))
+	return implicitPPOSTxList
 }

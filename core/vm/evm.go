@@ -38,9 +38,6 @@ import (
 	"github.com/PlatONnetwork/PlatON-Go/params"
 )
 
-const InvokedByTx = false
-const InvokedByContract = true
-
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
 var emptyCodeHash = crypto.Keccak256Hash(nil)
@@ -294,7 +291,7 @@ func (evm *EVM) Interpreter() Interpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -328,7 +325,8 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-
+	// EOA发起的交易，不管是转账交易，还是合约调用，都会走这个方法。
+	// 相当于EOA发起的单纯的转账交易，只是一个特殊的合约交易，即to只是一个没有代码的“合约”地址。
 	evm.Context.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
@@ -344,6 +342,7 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 			evm.vmConfig.Tracer.CaptureEnd(ret, startGas-gas, time.Since(startTime), err)
 		}(gas, time.Now())
 	}
+	// run方法中会判断len(contract.Code) == 0?
 	ret, err = run(evm, contract, input, false)
 
 	// When an error was returned by the EVM or when setting the creation code
@@ -355,18 +354,35 @@ func (evm *EVM) Call(invokedByContract bool, caller ContractRef, addr common.Add
 			contract.UseGas(contract.Gas)
 		}
 	}
-	//stats: 收集隐含LAT交易
-	// Call修改的是被调用者的storage
-	log.Info("to check if called by contract", "invokedByContract", invokedByContract)
-	if invokedByContract {
-		if value.Sign() != 0 {
-			//前面检查是否可以转账时，只要value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value)
-			//那说明value也可能是负数
-			log.Info("collect embed transfer tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", to.Address().Bech32(), "amount", value, "&value", &value)
-			monitor.CollectEmbedTransfer(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
-		}
+
+	// stats: 收集隐含LAT交易，至于转账是否成功，还需要看EOA发起的原始交易的回执，回执成功，则转账成功。
+	if value.Sign() != 0 && evm.isEmbedTransferTx(contract) {
+		//前面检查是否可以转账时，只要value.Sign() != 0 && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value)
+		//那说明value也可能是负数
+		log.Info("collect embed transfer tx in Call()", "blockNumber", evm.Context.BlockNumber.Uint64(), "txHash", evm.StateDB.TxHash(), "caller", caller.Address().Bech32(), "to", to.Address().Bech32(), "amount", value, "&value", &value)
+		monitor.MonitorInstance().CollectEmbedTransfer(evm.Context.BlockNumber.Uint64(), evm.StateDB.TxHash(), caller.Address(), to.Address(), value)
 	}
 	return ret, contract.Gas, err
+}
+
+func (evm *EVM) isEmbedTransferTx(contract *Contract) bool {
+	if len(contract.Code) > 0 {
+		return true
+	}
+
+	if _, ok := PlatONPrecompiledContracts120[*contract.CodeAddr]; ok {
+		return true
+	}
+
+	precompiles := PrecompiledContractsByzantium
+	if gov.Gte140VersionState(evm.StateDB) {
+		precompiles = PrecompiledContractsBerlin
+	}
+	if _, ok := precompiles[*contract.CodeAddr]; ok {
+		return true
+	}
+
+	return false
 }
 
 // CallCode executes the contract associated with the addr with the given input
@@ -606,7 +622,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			// stats: 收集新建的合约，不管是to为空时部署的合约，还是合约操作码opCreate/opCreate2都会走到这里
 			contractInfo := monitor.NewContractInfo(address, contract.Code)
 			log.Debug("new contract deployed in vm.create()", "contractInfo", string(common.ToJson(contractInfo)))
-			monitor.CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
+			monitor.MonitorInstance().CollectCreatedContractInfo(evm.StateDB.TxHash(), contractInfo)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}

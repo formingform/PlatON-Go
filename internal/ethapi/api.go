@@ -1579,7 +1579,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		// 把tx.to==nil/opCreate/opCreate2操作码3种方式建的合约地址拿出来
-		createdContractInfoList := monitor.GetCreatedContractInfoList(blockNumber, value.Hash())
+		createdContractInfoList := monitor.MonitorInstance().GetCreatedContractInfoList(blockNumber, value.Hash())
 		if nil == createdContractInfoList {
 			fields["contractCreated"] = []*monitor.ContractInfo{}
 		} else {
@@ -1587,7 +1587,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		// 把opSuicide操作码销毁的合约地址拿出来，并放入fields["contractSuicided"]
-		suicidedContractInfoList := monitor.GetSuicidedContractInfoList(blockNumber, value.Hash())
+		suicidedContractInfoList := monitor.MonitorInstance().GetSuicidedContractInfoList(blockNumber, value.Hash())
 		if nil == suicidedContractInfoList {
 			fields["contractSuicided"] = []*monitor.ContractInfo{}
 		} else {
@@ -1595,7 +1595,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		// 把本交易发现的代理关系拿出来，放入proxyContract
-		proxyPatternList := monitor.GetProxyPatternList(blockNumber, value.Hash())
+		proxyPatternList := monitor.MonitorInstance().GetProxyPatternList(blockNumber, value.Hash())
 		if nil == proxyPatternList {
 			fields["proxyPatterns"] = []*monitor.ProxyPattern{}
 		} else {
@@ -1603,12 +1603,21 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		}
 
 		// 把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
-		embedTransferList := monitor.GetEmbedTransfer(blockNumber, value.Hash())
+		embedTransferList := monitor.MonitorInstance().GetEmbedTransfer(blockNumber, value.Hash())
 		if embedTransferList == nil {
 			fields["embedTransfer"] = []*monitor.EmbedTransfer{}
 		} else {
 			fields["embedTransfer"] = embedTransferList
 		}
+
+		// 把交易中产生的隐式PPOS调用
+		implicitPPOSTxList := monitor.MonitorInstance().GetImplicitPPOSTx(blockNumber, value.Hash())
+		if implicitPPOSTxList == nil {
+			fields["implicitPPOSTx"] = []*monitor.ImplicitPPOSTx{}
+		} else {
+			fields["implicitPPOSTx"] = implicitPPOSTxList
+		}
+
 		queue[key] = fields
 	}
 	return queue, nil

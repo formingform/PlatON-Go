@@ -11,6 +11,8 @@ import (
 	"math/big"
 )
 
+// 这个方式暂时未启用，需要scan-agent的改造
+
 // API defines an exposed API function interface.
 type API interface {
 	GetHistoryVerifierList(blockNumber *big.Int) (staking.ValidatorExQueue, error)
