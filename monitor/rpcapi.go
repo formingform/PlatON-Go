@@ -1,7 +1,9 @@
 package monitor
 
 import (
+	"context"
 	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/rpc"
 	"github.com/PlatONnetwork/PlatON-Go/x/gov"
@@ -12,60 +14,51 @@ import (
 )
 
 // 这个方式暂时未启用，需要scan-agent的改造
-
-// API defines an exposed API function interface.
-type API interface {
-	GetHistoryVerifierList(blockNumber *big.Int) (staking.ValidatorExQueue, error)
-	GetHistoryValidatorList(blockNumber *big.Int) (staking.ValidatorExQueue, error)
-	GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, error)
-	GetHistoryLowRateSlashList(blockNumber *big.Int) (staking.SlashNodeQueue, error)
-	GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error)
-	GetRestrictingBalance(addresses []common.Address, blockHash common.Hash, blockNumber *big.Int) []restricting.BalanceResult
-	GetProposalParticipants(proposalID, blockHash common.Hash) (accuVerifierAccount uint64, yeas uint64, nays uint64, abstentions uint64, err error)
-	GetPPosInvokeInfo(blockNumber *big.Int) (staking.TransBlockReturnQueue, error)
+type Backend interface {
+	CurrentHeader() *types.Header
+	CurrentBlock() *types.Block
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 }
 
 type MonitorAPI struct {
-	monitor API
-}
-
-func NewMonitorAPI(monitor API) *MonitorAPI {
-	return &MonitorAPI{monitor: monitor}
+	b Backend
 }
 
 // APIs returns a list of APIs provided by the consensus engine.
-func (monitor *Monitor) APIs() []rpc.API {
+func NewMonitorAPIs(b Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "monitor",
 			Version:   "1.0",
-			Service:   NewMonitorAPI(monitor),
+			Service:   &MonitorAPI{b},
 			Public:    true,
 		},
 	}
 }
 
-func (monitor *Monitor) GetHistoryVerifierList(blockNumber *big.Int) (staking.ValidatorExQueue, error) {
+func (api *MonitorAPI) GetHistoryVerifierList(blockNumber *big.Int) (staking.ValidatorExQueue, error) {
 	return plugin.StakingInstance().GetHistoryVerifierList(blockNumber.Uint64())
 }
 
-func (monitor *Monitor) GetHistoryValidatorList(blockNumber *big.Int) (staking.ValidatorExQueue, error) {
+func (api *MonitorAPI) GetHistoryValidatorList(blockNumber *big.Int) (staking.ValidatorExQueue, error) {
 	return plugin.StakingInstance().GetHistoryValidatorList(blockNumber.Uint64())
 }
 
-func (monitor *Monitor) GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, error) {
+func (api *MonitorAPI) GetHistoryReward(blockNumber *big.Int) (staking.RewardReturn, error) {
 	return plugin.StakingInstance().GetHistoryReward(blockNumber.Uint64())
 }
 
-func (monitor *Monitor) GetHistoryLowRateSlashList(blockNumber *big.Int) (staking.SlashNodeQueue, error) {
+func (api *MonitorAPI) GetHistoryLowRateSlashList(blockNumber *big.Int) (staking.SlashNodeQueue, error) {
 	return plugin.StakingInstance().GetSlashData(blockNumber.Uint64())
 }
 
-func (monitor *Monitor) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
+func (api *MonitorAPI) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
 	return plugin.StakingInstance().GetNodeVersion(blockHash)
 }
 
-func (monitor *Monitor) GetRestrictingBalance(accounts []common.Address, blockHash common.Hash, blockNumber *big.Int) []restricting.BalanceResult {
+func (api *MonitorAPI) GetRestrictingBalance(accounts []common.Address, blockHash common.Hash, blockNumber *big.Int) []restricting.BalanceResult {
 	resposne := make([]restricting.BalanceResult, len(accounts))
 
 	for idx, address := range accounts {
@@ -84,7 +77,7 @@ func (monitor *Monitor) GetRestrictingBalance(accounts []common.Address, blockHa
 	return resposne
 }
 
-func (monitor *Monitor) GetProposalParticipants(proposalID, blockHash common.Hash) (accuVerifierAccount uint64, yeas uint64, nays uint64, abstentions uint64, err error) {
+func (api *MonitorAPI) GetProposalParticipants(proposalID, blockHash common.Hash) (accuVerifierAccount uint64, yeas uint64, nays uint64, abstentions uint64, err error) {
 	proposal, err := gov.GetProposal(proposalID, monitor.statedb)
 	if err != nil {
 		return 0, 0, 0, 0, err
@@ -104,6 +97,6 @@ func (monitor *Monitor) GetProposalParticipants(proposalID, blockHash common.Has
 	return uint64(len(list)), yeas, nays, abstentions, nil
 }
 
-func (monitor *Monitor) GetPPosInvokeInfo(blockNumber *big.Int) (staking.TransBlockReturnQueue, error) {
+func (api *MonitorAPI) GetPPosInvokeInfo(blockNumber *big.Int) (staking.TransBlockReturnQueue, error) {
 	return plugin.StakingInstance().GetTransData(blockNumber.Uint64())
 }
