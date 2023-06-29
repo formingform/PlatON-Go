@@ -61,8 +61,8 @@ func TestLoadProxyPattern(t *testing.T) {
 	txHash := common.Hash{0x021, 0x02, 0x3, 0x9, 0x4}
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	monitorDBInstance().Delete([]byte(dbKey))
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	MonitorInstance().monitordb.Delete([]byte(dbKey))
+	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return
@@ -75,7 +75,7 @@ func TestLoadProxyPattern(t *testing.T) {
 	json := common.ToJson(proxyPatternList)
 	fmt.Println("json:" + string(json))
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbKey), json)
+		MonitorInstance().monitordb.Put([]byte(dbKey), json)
 		log.Debug("save proxy patterns success")
 	}
 
@@ -89,9 +89,9 @@ func TestLoadProxyPatternMap(t *testing.T) {
 	targetInfo := NewContractInfo(common.Address{0x02}, []byte{0x01})
 
 	dbMapKey := proxyPatternMapKey.String()
-	monitorDBInstance().Delete([]byte(dbMapKey))
+	MonitorInstance().monitordb.Delete([]byte(dbMapKey))
 
-	data, err := monitorDBInstance().Get([]byte(dbMapKey))
+	data, err := MonitorInstance().monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy map", "err", err)
 		return
@@ -107,7 +107,7 @@ func TestLoadProxyPatternMap(t *testing.T) {
 	json := common.ToJson(proxyPatternMap)
 	fmt.Println("json:" + string(json))
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbMapKey), json)
+		MonitorInstance().monitordb.Put([]byte(dbMapKey), json)
 		log.Debug("save proxy map success")
 	}
 }

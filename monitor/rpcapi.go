@@ -13,7 +13,7 @@ import (
 	"math/big"
 )
 
-// 这个方式暂时未启用，需要scan-agent的改造
+// 这个方式暂时未启用，需要scan-agent的改造，用rpc-call代替合约方法调用
 type Backend interface {
 	CurrentHeader() *types.Header
 	CurrentBlock() *types.Block

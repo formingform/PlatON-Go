@@ -33,8 +33,10 @@ func (dbKey MonitorDbKey) String() string {
 }
 
 type Monitor struct {
-	statedb   *state.StateDB
-	monitordb *monitorDB
+	statedb           *state.StateDB
+	monitordb         *monitorDB
+	stakingPlugin     Intf_stakingPlugin
+	restrictingPlugin Intf_restrictingPlugin
 }
 
 var (
@@ -44,12 +46,23 @@ var (
 
 func InitMonitor(statedb *state.StateDB) {
 	onceMonitor.Do(func() {
-		monitor = &Monitor{statedb: statedb, monitordb: monitorDBInstance()}
+		if levelDB, err := openLevelDB(16, 500); err != nil {
+			log.Crit("init monitor db fail", "err", err)
+		} else {
+			dbInstance := &monitorDB{path: dbFullPath, levelDB: levelDB, closed: false}
+			monitor = &Monitor{statedb: statedb, monitordb: dbInstance}
+		}
+
 	})
 }
-
 func MonitorInstance() *Monitor {
 	return monitor
+}
+func (m *Monitor) SetStakingPlugin(pluginImpl Intf_stakingPlugin) {
+	monitor.stakingPlugin = pluginImpl
+}
+func (m *Monitor) SetRestrictingPlugin(pluginImpl Intf_restrictingPlugin) {
+	monitor.restrictingPlugin = pluginImpl
 }
 
 /*type ProxyInfo struct {
@@ -65,7 +78,7 @@ func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, f
 	log.Debug("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load embed transfers", "err", err)
 		return
@@ -84,7 +97,7 @@ func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, f
 
 	json := common.ToJson(embedTransferList)
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 		log.Debug("save embed transfers success")
 	}
 
@@ -94,7 +107,7 @@ func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*Em
 	log.Debug("GetEmbedTransfer", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err {
 		log.Error("failed to load embed transfers", "err", err)
 		return nil
@@ -109,7 +122,7 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 	log.Debug("CollectCreatedContractInfo", "txHash", txHash.Hex(), "contractInfo", string(common.ToJson(contractInfo)))
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load created contracts", "err", err)
 		return
@@ -121,7 +134,7 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 
 	json := common.ToJson(createdContractInfoList)
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 
 	}
 	log.Debug("CollectCreatedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
@@ -132,7 +145,7 @@ func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.H
 	log.Debug("GetCreatedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load created contracts", "err", err)
 		return nil
@@ -148,7 +161,7 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 	log.Debug("CollectSuicidedContractInfo", "txHash", txHash.Hex(), "suicidedContractAddr", suicidedContractAddr.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load suicided contracts", "err", err)
 		return
@@ -164,7 +177,7 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 
 	json := common.ToJson(suicidedContractInfoList)
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 	}
 	log.Debug("CollectSuicidedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
 }
@@ -173,7 +186,7 @@ func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.
 	log.Debug("GetSuicidedContract", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load suicided contracts", "err", err)
 		return nil
@@ -190,7 +203,7 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	// 检查是否发现过此代理关系
 	// === to save the proxy map to local db
 	dbMapKey := proxyPatternMapKey.String()
-	data, err := monitorDBInstance().Get([]byte(dbMapKey))
+	data, err := m.monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy map", "err", err)
 		return
@@ -207,13 +220,13 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 
 	json := common.ToJson(proxyPatternMap)
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbMapKey), json)
+		m.monitordb.Put([]byte(dbMapKey), json)
 	}
 	log.Debug("CollectProxyPattern save proxy relation flag success", "txHash", txHash.Hex(), "json", string(json))
 
 	// 收集当前当前交易发现的代理关系
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err = monitorDBInstance().Get([]byte(dbKey))
+	data, err = m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return
@@ -225,14 +238,14 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 
 	json = common.ToJson(proxyPatternList)
 	if len(json) > 0 {
-		monitorDBInstance().Put([]byte(dbKey), json)
+		m.monitordb.Put([]byte(dbKey), json)
 	}
 	log.Debug("CollectProxyPattern success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) IsProxied(self, target common.Address) bool {
 	dbMapKey := proxyPatternMapKey.String()
-	data, err := monitorDBInstance().Get([]byte(dbMapKey))
+	data, err := m.monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy map", "err", err)
 		return false
@@ -252,7 +265,7 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 	log.Debug("GetProxyPattern", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return nil
@@ -270,7 +283,7 @@ func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, 
 	log.Debug("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.Hex(), "from", from.Hex(), "to", to.Hex(), "input", hexutil.Encode(input), "result", hexutil.Encode(result))
 
 	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load data from local db", "err", err)
 		return
@@ -296,7 +309,7 @@ func (m *Monitor) GetImplicitPPOSTx(blockNumber uint64, txHash common.Hash) []*I
 	log.Debug("GetImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.Hex())
 
 	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
-	data, err := monitorDBInstance().Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load data from local db", "err", err)
 		return nil

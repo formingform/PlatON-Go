@@ -2,6 +2,9 @@ package monitor
 
 import (
 	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/PlatONnetwork/PlatON-Go/x/restricting"
+	"github.com/PlatONnetwork/PlatON-Go/x/staking"
+	"github.com/PlatONnetwork/PlatON-Go/x/xcom"
 	"math/big"
 )
 
@@ -35,4 +38,17 @@ type ImplicitPPOSTx struct {
 	//key=原始交易hash
 	//value=PPOSTx
 	PPOSTxMap map[common.Hash][]*PPOSTx
+}
+
+type Intf_stakingPlugin interface {
+	GetNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error)
+	GetCurrValList(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
+	GetVerifierArray(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
+	GetCandidateList(common.Hash, uint64) (staking.CandidateHexQueue, error)
+	GetCandidateInfo(common.Hash, *big.Int) (*staking.Candidate, error)
+	GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error)
+	GetGetDelegationLockCompactInfo(blockHash common.Hash, blockNumber uint64, delAddr common.Address) (*staking.DelegationLockHex, error)
+}
+type Intf_restrictingPlugin interface {
+	MustGetRestrictingInfoByDecode(state xcom.StateDB, account common.Address) ([]byte, restricting.RestrictingInfo, *common.BizError)
 }

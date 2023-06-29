@@ -3,9 +3,6 @@ package monitor
 import (
 	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"sync"
-
 	leveldbError "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -19,41 +16,20 @@ const (
 )
 
 var (
-	once       sync.Once
 	dbFullPath string
-	dbInstance *monitorDB
-	blockchain *core.BlockChain
 	//ErrNotFound when db not found
 	ErrNotFound = errors.New("monitorDB: not found")
 )
 
 type monitorDB struct {
-	path       string
-	levelDB    *leveldb.DB
-	closed     bool
-	blockchain *core.BlockChain
+	path    string
+	levelDB *leveldb.DB
+	closed  bool
 }
 
 func SetDbFullPath(fullPath string) {
 	dbFullPath = fullPath
 	log.Info("set monitor db", "path", dbFullPath)
-}
-
-func SetBlockChain(c *core.BlockChain) {
-	blockchain = c
-	log.Info("set blockchain")
-}
-
-// monitorDBInstance returns the instance of monitorDB. REMEMBER: call SetDbFullPath() and SetBlockChain() first.
-func monitorDBInstance() *monitorDB {
-	once.Do(func() {
-		if levelDB, err := openLevelDB(16, 500); err != nil {
-			log.Crit("init monitor db fail", "err", err)
-		} else {
-			dbInstance = &monitorDB{path: dbFullPath, levelDB: levelDB, blockchain: blockchain, closed: false}
-		}
-	})
-	return dbInstance
 }
 
 func (db *monitorDB) Put(key, value []byte) error {

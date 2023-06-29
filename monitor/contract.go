@@ -11,12 +11,6 @@ import (
 	"strings"
 )
 
-type StateDB interface {
-	GetState(common.Address, []byte) []byte
-	GetCode(common.Address) []byte
-	TxHash() common.Hash
-}
-
 type ContractType int
 
 const (
