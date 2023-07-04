@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"bytes"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
@@ -16,7 +17,7 @@ const (
 	CreatedContractKey
 	SuicidedContractKey
 	ProxyPatternKey
-	proxyPatternMapKey
+	proxyPatternFlagKey
 	ImplicitPPOSTxKey
 )
 
@@ -27,7 +28,7 @@ func (dbKey MonitorDbKey) String() string {
 		"CreatedContractKey",
 		"SuicidedContractKey",
 		"ProxyPatternKey",
-		"proxyPatternMapKey",
+		"proxyPatternFlagKey",
 		"ImplicitPPOSTxKey",
 	}[dbKey]
 }
@@ -200,33 +201,20 @@ func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.
 
 // CollectProxyPattern 根据交易txHash发现代理关系
 func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, implementationContractInfo *ContractInfo) {
-	// 检查是否发现过此代理关系
+	// 检查是否发现过此代理关系, 以proxy address为key即可
 	// === to save the proxy map to local db
-	dbMapKey := proxyPatternMapKey.String()
-	data, err := m.monitordb.Get([]byte(dbMapKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy map", "err", err)
+	if m.IsProxied(proxyContractInfo.Address, implementationContractInfo.Address) {
 		return
+	} else {
+		dbMapKey := proxyPatternFlagKey.String() + "_" + proxyContractInfo.Address.Hex()
+		m.monitordb.Put([]byte(dbMapKey), implementationContractInfo.Address.Bytes())
 	}
 
-	var proxyPatternMap = make(map[common.Address]common.Address)
-	common.ParseJson(data, &proxyPatternMap)
-
-	if _, exist := proxyPatternMap[proxyContractInfo.Address]; exist {
-		return
-	}
-
-	proxyPatternMap[proxyContractInfo.Address] = implementationContractInfo.Address
-
-	json := common.ToJson(proxyPatternMap)
-	if len(json) > 0 {
-		m.monitordb.Put([]byte(dbMapKey), json)
-	}
-	log.Debug("CollectProxyPattern save proxy relation flag success", "txHash", txHash.Hex(), "json", string(json))
+	log.Debug("CollectProxyPattern save proxy relation flag success", "txHash", txHash.Hex(), "proxy", proxyContractInfo.Address.Hex(), "implementation", implementationContractInfo.Address.Hex())
 
 	// 收集当前当前交易发现的代理关系
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
-	data, err = m.monitordb.Get([]byte(dbKey))
+	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy patterns", "err", err)
 		return
@@ -236,7 +224,7 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	common.ParseJson(data, &proxyPatternList)
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: proxyContractInfo, Implementation: implementationContractInfo})
 
-	json = common.ToJson(proxyPatternList)
+	json := common.ToJson(proxyPatternList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 	}
@@ -244,21 +232,18 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 }
 
 func (m *Monitor) IsProxied(self, target common.Address) bool {
-	dbMapKey := proxyPatternMapKey.String()
-	data, err := m.monitordb.Get([]byte(dbMapKey))
+	dbMapKey := proxyPatternFlagKey.String() + "_" + self.String()
+	addressBytes, err := m.monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy map", "err", err)
+		log.Error("failed to load proxy flag", "err", err)
 		return false
 	}
 
-	var proxyPatternMap map[common.Address]common.Address
-	common.ParseJson(data, &proxyPatternMap)
-	if value, exist := proxyPatternMap[self]; exist {
-		if value == target {
-			return true
-		}
+	if len(addressBytes) > 0 && bytes.Compare(addressBytes, target.Bytes()) == 0 {
+		return true
+	} else {
+		return false
 	}
-	return false
 }
 
 func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []*ProxyPattern {
