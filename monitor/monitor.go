@@ -99,9 +99,9 @@ func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, f
 	json := common.ToJson(embedTransferList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
-		log.Debug("save embed transfers success")
+		log.Info("save embed transfers success")
 	}
-
+	log.Info("CollectEmbedTransfer success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*EmbedTransfer {
@@ -136,10 +136,8 @@ func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *C
 	json := common.ToJson(createdContractInfoList)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
-
 	}
-	log.Debug("CollectCreatedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
-
+	log.Info("CollectCreatedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
@@ -180,7 +178,7 @@ func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContra
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 	}
-	log.Debug("CollectSuicidedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
+	log.Info("CollectSuicidedContractInfo success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.Hash) []*ContractInfo {
@@ -228,12 +226,16 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 	}
-	log.Debug("CollectProxyPattern success", "txHash", txHash.Hex(), "json", string(json))
+	log.Info("CollectProxyPattern success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 func (m *Monitor) IsProxied(self, target common.Address) bool {
 	dbMapKey := proxyPatternFlagKey.String() + "_" + self.String()
 	addressBytes, err := m.monitordb.Get([]byte(dbMapKey))
+	if err == ErrNotFound {
+		return false
+	}
+
 	if nil != err && err != ErrNotFound {
 		log.Error("failed to load proxy flag", "err", err)
 		return false
@@ -286,7 +288,7 @@ func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, 
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 	}
-	log.Debug("CollectImplicitPPOSTx success", "txHash", txHash.Hex(), "json", string(json))
+	log.Info("CollectImplicitPPOSTx success", "txHash", txHash.Hex(), "json", string(json))
 }
 
 // 收集隐式的ppos交易数据
