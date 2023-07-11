@@ -851,7 +851,10 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 			targetInfo := monitor.NewContractInfo(toAddr, interpreter.evm.StateDB.GetCode(toAddr))
 			log.Debug("delegate call details", "self", string(common.ToJson(selfInfo)), "target", string(common.ToJson(targetInfo)))
 
-			isProxyPattern := inspectProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+			isProxyPattern := inspectZeppelinStandardProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+			if !isProxyPattern {
+				isProxyPattern = inspectCommonProxyPattern(interpreter.evm, callContext.contract, selfInfo, targetInfo)
+			}
 			//---
 			if isProxyPattern == true {
 				log.Debug("proxy pattern found")
@@ -1175,8 +1178,8 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 // Keccak256("org.zeppelinos.proxy.implementation") = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3"
 var IMPLEMENTATION_SLOT = hexutil.MustDecode("0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3")
 
-func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
-	log.Debug("inspectProxyPattern", "selfInfo.Type", selfInfo.Type.String(), "targetInfo.Type", targetInfo.Type.String())
+func inspectZeppelinStandardProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
+	log.Debug("inspectZeppelinStandardProxyPattern", "selfInfo.Type", selfInfo.Type.String(), "targetInfo.Type", targetInfo.Type.String())
 	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
 	evm.vmConfig.ProxyInspected = true
 
@@ -1227,7 +1230,7 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 	return isPorxyPattern
 }
 
-/*func inspectProxyPattern_old(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
+func inspectCommonProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
 	log.Debug("inspectProxyPattern", "selfInfo.Type==EVM?", selfInfo.Type == monitor.EVM, "targetInfo.Type==ERC20?", targetInfo.Type == monitor.ERC20)
 
 	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
@@ -1276,7 +1279,41 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 				}
 
 			}
+		} else if targetInfo.Type == monitor.ERC721 {
+			if targetInfo.IsSupportErc721Metadata {
+				selfNameBytes, nameErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
+				targetNameBytes, nameErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForName)
+
+				selfSymbolBytes, symbolErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
+				targetSymbolBytes, symbolErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForSymbol)
+
+				if nameErr1 == nil && nameErr2 == nil && symbolErr1 == nil && symbolErr2 == nil {
+					selfName := monitor.UnpackName(selfNameBytes)
+					targetName := monitor.UnpackName(targetNameBytes)
+
+					selfSymbol := monitor.UnpackSymbol(selfSymbolBytes)
+					targetSymbol := monitor.UnpackSymbol(targetSymbolBytes)
+
+					if len(selfName) > 0 && len(targetName) == 0 &&
+						len(selfSymbol) > 0 && len(targetSymbol) == 0 {
+						targetInfo.TokenName = selfName
+						targetInfo.TokenSymbol = selfSymbol
+						return true
+					}
+				}
+			}
+			if targetInfo.IsSupportErc721Enumerable {
+				selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
+				targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
+				if totalSupplyErr1 == nil && totalSupplyErr2 == nil {
+					selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
+					targetTotalSupply := monitor.UnpackTotalSupply(targetTotalSupplyBytes)
+					if selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
+						targetInfo.TokenTotalSupply = selfTotalSupply
+					}
+				}
+			}
 		}
 	}
 	return false
-}*/
+}
