@@ -35,6 +35,13 @@ func (t ContractType) String() string {
 }
 
 var (
+	// 返回的Keccak256 hash,
+	funcKeccak256 = func(input string) []byte {
+		prefix := sha3.NewLegacyKeccak256()
+		prefix.Write([]byte(input))
+		return prefix.Sum(nil)
+	}
+
 	// 返回方法签名的hash, 这个hash将出现在合约的bin中，为了方便比较，返回hash的string(不含0x前缀)
 	evmFuncHashBytes = func(funcName string) []byte {
 		prefix := sha3.NewLegacyKeccak256()

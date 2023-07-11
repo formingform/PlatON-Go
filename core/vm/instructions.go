@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/byteutil"
+	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/monitor"
@@ -1171,7 +1172,62 @@ func getContractInfo(evm *EVM, caller ContractRef, newContractAddr common.Addres
 	return contractInfo
 }*/
 
+// Keccak256("org.zeppelinos.proxy.implementation") = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3"
+var IMPLEMENTATION_SLOT = hexutil.MustDecode("0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3")
+
 func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
+	log.Debug("inspectProxyPattern", "selfInfo.Type", selfInfo.Type.String(), "targetInfo.Type", targetInfo.Type.String())
+	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
+	evm.vmConfig.ProxyInspected = true
+
+	isPorxyPattern := false
+
+	implAddrBytes := evm.StateDB.GetState(selfInfo.Address, IMPLEMENTATION_SLOT)
+	implAddress := common.BytesToAddress(implAddrBytes)
+	if targetInfo.Address == implAddress {
+		isPorxyPattern = true
+		if selfInfo.Type == monitor.EVM {
+			if targetInfo.Type == monitor.ERC20 {
+				selfNameBytes, nameErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
+				selfSymbolBytes, symbolErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
+				selfDecimalsBytes, decimalsErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
+				selfTotalSupplyBytes, totalSupplyErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
+				if nameErr == nil && symbolErr == nil && decimalsErr == nil && totalSupplyErr == nil {
+					selfName := monitor.UnpackName(selfNameBytes)
+					selfSymbol := monitor.UnpackSymbol(selfSymbolBytes)
+					selfDecimals := monitor.UnpackDecimals(selfDecimalsBytes)
+					selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
+					targetInfo.TokenName = selfName
+					targetInfo.TokenSymbol = selfSymbol
+					targetInfo.TokenDecimals = selfDecimals
+					targetInfo.TokenTotalSupply = selfTotalSupply
+				}
+			} else if targetInfo.Type == monitor.ERC721 {
+				if targetInfo.IsSupportErc721Metadata {
+					selfNameBytes, nameErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
+					selfSymbolBytes, symbolErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
+					if nameErr == nil && symbolErr == nil {
+						selfName := monitor.UnpackName(selfNameBytes)
+						selfSymbol := monitor.UnpackSymbol(selfSymbolBytes)
+						targetInfo.TokenName = selfName
+						targetInfo.TokenSymbol = selfSymbol
+					}
+				}
+				if targetInfo.IsSupportErc721Enumerable {
+					selfTotalSupplyBytes, totalSupplyErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
+					if totalSupplyErr == nil {
+						selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
+						targetInfo.TokenTotalSupply = selfTotalSupply
+					}
+				}
+			}
+		}
+	}
+
+	return isPorxyPattern
+}
+
+/*func inspectProxyPattern_old(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
 	log.Debug("inspectProxyPattern", "selfInfo.Type==EVM?", selfInfo.Type == monitor.EVM, "targetInfo.Type==ERC20?", targetInfo.Type == monitor.ERC20)
 
 	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
@@ -1223,4 +1279,4 @@ func inspectProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *mon
 		}
 	}
 	return false
-}
+}*/

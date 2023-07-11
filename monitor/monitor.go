@@ -109,8 +109,13 @@ func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*Em
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
+
 	if nil != err {
-		log.Error("failed to load embed transfers", "err", err)
+		if err == ErrNotFound {
+			log.Debug("GetCreatedContract success: no data")
+		} else {
+			log.Error("GetCreatedContract failed", "err", err)
+		}
 		return nil
 	}
 
@@ -145,8 +150,12 @@ func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.H
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load created contracts", "err", err)
+	if nil != err {
+		if err == ErrNotFound {
+			log.Debug("GetCreatedContract success: no data")
+		} else {
+			log.Error("GetCreatedContract failed", "err", err)
+		}
 		return nil
 	}
 	var createdContractInfoList []*ContractInfo
@@ -186,8 +195,12 @@ func (m *Monitor) GetSuicidedContractInfoList(blockNumber uint64, txHash common.
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load suicided contracts", "err", err)
+	if nil != err {
+		if err == ErrNotFound {
+			log.Debug("GetSuicidedContract success: no data")
+		} else {
+			log.Error("GetSuicidedContract failed", "err", err)
+		}
 		return nil
 	}
 	var suicidedContractInfoList []*ContractInfo
@@ -233,12 +246,12 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 func (m *Monitor) IsProxied(proxy, impl common.Address) bool {
 	flagDbKey := proxyPatternFlagKey.String() + "_" + proxy.String() + "_" + impl.String()
 	flagBytes, err := m.monitordb.Get([]byte(flagDbKey))
-	if err == ErrNotFound {
-		return false
-	}
-
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy flag", "err", err)
+	if nil != err {
+		if err == ErrNotFound {
+			log.Debug("IsProxied success: no data")
+		} else {
+			log.Error("IsProxied failed", "err", err)
+		}
 		return false
 	}
 
@@ -254,8 +267,12 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy patterns", "err", err)
+	if nil != err {
+		if err == ErrNotFound {
+			log.Debug("GetProxyPatternList success: no data")
+		} else {
+			log.Error("GetProxyPatternList failed", "err", err)
+		}
 		return nil
 	}
 	var proxyPatternList []*ProxyPattern
@@ -298,8 +315,12 @@ func (m *Monitor) GetImplicitPPOSTx(blockNumber uint64, txHash common.Hash) []*I
 
 	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
-	if nil != err && err != ErrNotFound {
-		log.Error("failed to load data from local db", "err", err)
+	if nil != err {
+		if err == ErrNotFound {
+			log.Debug("GetImplicitPPOSTx success: no data")
+		} else {
+			log.Error("GetImplicitPPOSTx failed", "err", err)
+		}
 		return nil
 	}
 
