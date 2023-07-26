@@ -85,17 +85,25 @@ func (stkc *StakingContract) RequiredGas(input []byte) uint64 {
 	return 0
 }
 
+// 执行内置合约的入口，input前4位是方法Id，后面是对应方法的输入参数
+// 方法id，是根据方法签名，用Keccak256算法得到的hash，取前四位作为input的一部分，hash算法参考：monitor/contract.go:36
 func (stkc *StakingContract) Run(input []byte) ([]byte, error) {
 	if checkInputEmpty(input) {
 		return nil, nil
 	}
 	//adapt solidity contract
 	solFunc := stkc.SolidityFunc()
+	// 前4位，转成大头数字
 	methodId := binary.BigEndian.Uint32(input[:4])
 	if fn, ok := solFunc[methodId]; ok {
+		//执行新的内置合约方法（因为新的内置合约方法，和platon的内置合约方法的input构成不一致）
+		//内置合约有2个方法：
+		//1. stakeStateSync(uint256,bytes[])
+		//2. blockNumber()
 		return fn(input[4:])
 	}
 
+	//按原有方式执行内置合约
 	return execPlatonContract(input, stkc.FnSigns())
 }
 
@@ -311,6 +319,14 @@ func (stkc *StakingContract) stakeStateSync(input []byte) ([]byte, error) {
 	}
 	return nil, nil
 }
+
+// staking内置合约的交易执行完成后，记录log，只会把hashkey当前区块，以及收到的platon上的events的对应区块高度作为data
+// 因此scan-agent要知道完整的质押信息，有两个途径：
+// 途径1：
+// 1. 特殊节点在执行staking内置合约过程中，采集质押相关信息，并写入local monitordb.
+// 2. scan-agent中，不处理发送给staking内置合约的交易，而是处理区块receipt中的innerStaking字段
+// 途径2:
+// 1. scan-agent处理发送给staking内置合约的交易，按照hashkey执行staking内置合约的过程，解析交易的input，再解析处理其中的events。这个过程会比较复杂。
 func (stkc *StakingContract) addStakeStateSyncLog(end *big.Int) error {
 	data, err := helper.InnerStakeAbi.Events["StakeStateSync"].Inputs.Pack(new(big.Int).SetBytes(stkc.blockNumber()), end)
 	if err != nil {
