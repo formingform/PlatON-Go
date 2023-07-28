@@ -1030,11 +1030,11 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	data, err := plugin.STAKING_DB.HistoryDB.Get([]byte(blockKey))
 	var transBlock staking.TransBlock
 	if nil != err {
-		log.Error("saveTransData rlp get transblock error ", err)
+		log.Error("saveTransData failed", "get data from db error", err)
 	} else {
 		err = rlp.DecodeBytes(data, &transBlock)
 		if nil != err {
-			log.Error("saveTransData rlp decode transblock error ", err)
+			log.Error("saveTransData failed", "rlp decode data error", err)
 			return
 		}
 	}
