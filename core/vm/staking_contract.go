@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/PlatONnetwork/PlatON-Go/x/reward"
 
@@ -913,7 +914,7 @@ func (stkc *StakingContract) getHistoryVerifierList(blockNumber *big.Int) ([]byt
 	//blockHash := stkc.Evm.Context.BlockHash
 
 	arr, err := stkc.Plugin.GetHistoryVerifierList(blockNumber.Uint64())
-	if nil != err {
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		callResultHandler(stkc.Evm, "getHistoryVerifierList",
 			arr, staking.ErrGetVerifierList.Wrap(err.Error()))
 	}
@@ -931,13 +932,13 @@ func (stkc *StakingContract) getValidatorList() ([]byte, error) {
 	blockHash := stkc.Evm.Context.BlockHash
 
 	arr, err := stkc.Plugin.GetValidatorList(blockHash, blockNumber.Uint64(), plugin.CurrentRound, plugin.QueryStartNotIrr)
-	if snapshotdb.NonDbNotFoundErr(err) {
-
+	//if snapshotdb.NonDbNotFoundErr(err) {
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
 
-	if snapshotdb.IsDbNotFoundErr(err) || arr.IsEmpty() {
+	if strings.Contains(err.Error(), "not found") || arr.IsEmpty() {
 		return callResultHandler(stkc.Evm, "getValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap("ValidatorList info is not found")), nil
 	}
@@ -950,12 +951,12 @@ func (stkc *StakingContract) getHistoryValidatorList(blockNumber *big.Int) ([]by
 	//blockHash := stkc.Evm.Context.BlockHash
 
 	arr, err := stkc.Plugin.GetHistoryValidatorList(blockNumber.Uint64())
-	if nil != err {
+	if nil != err && !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getHistoryValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
 
-	if nil == arr {
+	if strings.Contains(err.Error(), "not found") || arr.IsEmpty() {
 		return callResultHandler(stkc.Evm, "getHistoryValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap("ValidatorList info is not found")), nil
 	}
@@ -968,7 +969,7 @@ func (stkc *StakingContract) getHistoryReward(blockNumber *big.Int) ([]byte, err
 	//blockHash := stkc.Evm.Context.BlockHash
 
 	reward, err := stkc.Plugin.GetHistoryReward(blockNumber.Uint64())
-	if nil != err {
+	if !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getHistoryReward",
 			reward, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
@@ -981,7 +982,7 @@ func (stkc *StakingContract) getHistorySlash(blockNumber *big.Int) ([]byte, erro
 	//blockHash := stkc.Evm.Context.BlockHash
 
 	slashData, err := stkc.Plugin.GetSlashData(blockNumber.Uint64())
-	if nil != err {
+	if nil != err && !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getHistorySlash",
 			slashData, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
@@ -994,7 +995,7 @@ func (stkc *StakingContract) QueryHistoryTrans(blockNumber *big.Int) ([]byte, er
 	//blockHash := stkc.Evm.Context.BlockHash
 
 	transData, err := stkc.Plugin.GetTransData(blockNumber.Uint64())
-	if nil != err {
+	if nil != err && !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "QueryHistoryTrans",
 			transData, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
