@@ -112,9 +112,9 @@ func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*Em
 
 	if nil != err {
 		if err == ErrNotFound {
-			log.Debug("GetCreatedContract success: no data")
+			log.Debug("GetEmbedTransfer success: no data")
 		} else {
-			log.Error("GetCreatedContract failed", "err", err)
+			log.Error("GetEmbedTransfer failed", "err", err)
 		}
 		return nil
 	}
