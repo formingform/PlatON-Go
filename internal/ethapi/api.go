@@ -1605,17 +1605,17 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlock(ctx context.Context, bl
 		// 把交易中产生的隐式LAT转账返回（如果本身的交易是合约交易才有）
 		embedTransferList := monitor.MonitorInstance().GetEmbedTransfer(blockNumber, value.Hash())
 		if embedTransferList == nil {
-			fields["embedTransfer"] = []*monitor.EmbedTransfer{}
+			fields["embedTransfers"] = []*monitor.EmbedTransfer{}
 		} else {
-			fields["embedTransfer"] = embedTransferList
+			fields["embedTransfers"] = embedTransferList
 		}
 
 		// 把交易中产生的隐式PPOS调用
 		implicitPPOSTxList := monitor.MonitorInstance().GetImplicitPPOSTx(blockNumber, value.Hash())
 		if implicitPPOSTxList == nil {
-			fields["implicitPPOSTx"] = []*monitor.ImplicitPPOSTx{}
+			fields["implicitPPOSTxs"] = []*monitor.ImplicitPPOSTx{}
 		} else {
-			fields["implicitPPOSTx"] = implicitPPOSTxList
+			fields["implicitPPOSTxs"] = implicitPPOSTxList
 		}
 
 		queue[key] = fields
