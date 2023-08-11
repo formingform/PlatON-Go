@@ -967,7 +967,7 @@ func (stkc *StakingContract) getHistoryValidatorList(blockNumber *big.Int) ([]by
 
 func (stkc *StakingContract) getHistoryReward(blockNumber *big.Int) ([]byte, error) {
 	//blockHash := stkc.Evm.Context.BlockHash
-
+	log.Debug("rpc.getHistoryReward", "blockNumber", blockNumber)
 	reward, err := stkc.Plugin.GetHistoryReward(blockNumber.Uint64())
 	if !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getHistoryReward",
