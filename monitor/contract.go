@@ -25,6 +25,7 @@ const (
 // 定义 MonitorDbKey 类型的方法 String(), 返回字符串。
 func (t ContractType) String() string {
 	return [...]string{
+		"PLACEHOLDER", // because ContractType start with 1, [0]
 		"EVM",
 		"WASM",
 		"UNKNOWN",
