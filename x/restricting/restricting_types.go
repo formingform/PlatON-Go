@@ -24,10 +24,12 @@ import (
 )
 
 // for genesis and plugin test
+// 每个账户，作为锁仓计划的资金释放目标对象，都可以有且只有一个这样的对象，记录当前的锁仓计划状态
+// 总的锁仓金额 =  AdvanceAmount + CachePlanAmount
 type RestrictingInfo struct {
-	NeedRelease     *big.Int
-	AdvanceAmount   *big.Int
-	CachePlanAmount *big.Int
+	NeedRelease     *big.Int // 欠释放金额，到了结算周期需要释放却因为质押而无法释放的金额
+	AdvanceAmount   *big.Int // 用于质押或委托的金额
+	CachePlanAmount *big.Int // 可用来质押或委托的锁仓金额
 	ReleaseList     []uint64 // ReleaseList representation which epoch will release restricting
 }
 
@@ -42,6 +44,7 @@ func (r *RestrictingInfo) RemoveEpoch(epoch uint64) {
 
 // for contract, plugin test, byte util
 type RestrictingPlan struct {
+	// 多少个epoch后释放，指时间段
 	Epoch  uint64   `json:"epoch"`  // epoch representation of the released epoch at the target blockNumber
 	Amount *big.Int `json:"amount"` // amount representation of the released amount
 }
@@ -54,15 +57,19 @@ type ReleaseAmountInfo struct {
 
 // for plugin test
 type Result struct {
-	Balance *hexutil.Big        `json:"balance"`
-	Debt    *hexutil.Big        `json:"debt"`
-	Entry   []ReleaseAmountInfo `json:"plans"`
-	Pledge  *hexutil.Big        `json:"Pledge"`
+	//restricting.RestrictingInfo.CacheBalance 可用的锁仓金额 = 可用锁仓金额 - 已释放的（需要释放的） - 被惩罚的(用于质押而被处罚)
+	Balance *hexutil.Big `json:"balance"`
+	// restricting.RestrictingInfo.NeedRelease 欠释放金额，到了结算周期需要释放却因为质押而无法释放的金额
+	Debt *hexutil.Big `json:"debt"`
+
+	Entry []ReleaseAmountInfo `json:"plans"`
+	// restricting.RestrictingInfo.AdvanceAmount 用于质押和委托的金额
+	Pledge *hexutil.Big `json:"Pledge"`
 }
 type BalanceResult struct {
 	// 用户账户
 	Account common.Address `json:"account"`
-	// 自由金余额
+	// 账户余额
 	FreeBalance *hexutil.Big `json:"freeBalance"`
 	// 锁仓锁定的余额
 	LockBalance *hexutil.Big `json:"lockBalance"`

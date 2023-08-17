@@ -230,6 +230,8 @@ func (rp *RestrictingPlugin) releaseGenesisRestrictingPlans(blockHash common.Has
 // ReleaseEpoch:   the number of accounts to be released on the epoch corresponding to the target block height
 // ReleaseAccount: the account on the index on the target epoch
 // ReleaseAmount: the amount of the account to be released on the target epoch
+// from: 合约调用者（交易发起者），锁仓计划中，资金的来源地
+// account: 锁仓计划中，资金释放的目的地
 func (rp *RestrictingPlugin) AddRestrictingRecord(from, account common.Address, blockNum uint64, blockHash common.Hash, plans []restricting.RestrictingPlan, state xcom.StateDB, txhash common.Hash) error {
 
 	rp.log.Debug("Call AddRestrictingRecord begin", "sender", from, "account", account, "plans", plans)
@@ -261,7 +263,9 @@ func (rp *RestrictingPlugin) AddRestrictingRecord(from, account common.Address, 
 	rp.transferAmount(state, from, vm.RestrictingContractAddr, totalAmount)
 
 	restrictingKey, restrictInfoByte := rp.getRestrictingInfo(state, account)
+
 	if len(restrictInfoByte) == 0 {
+		// 还没有锁仓计划，则所有这次锁仓的金额放入CachePlanAmount
 		rp.log.Trace("restricting record not exist", "account", account.String())
 		for epoch, amount := range totalPlans {
 			rp.initEpochInfo(state, epoch, account, amount)
@@ -272,22 +276,35 @@ func (rp *RestrictingPlugin) AddRestrictingRecord(from, account common.Address, 
 		restrictInfo.AdvanceAmount = big.NewInt(0)
 		restrictInfo.ReleaseList = epochArr
 	} else {
+		// 已经有锁仓计划
 		rp.log.Trace("restricting record exist", "account", account.String())
 		if err = rlp.DecodeBytes(restrictInfoByte, &restrictInfo); err != nil {
 			rp.log.Error("failed to rlp decode the restricting account", "err", err.Error())
 			return common.InternalError.Wrap(err.Error())
 		}
+
 		if restrictInfo.NeedRelease.Cmp(common.Big0) > 0 {
+			// 已经有锁仓计划，并且欠释放金额（NeedRelease) > 0
 			if restrictInfo.NeedRelease.Cmp(totalAmount) >= 0 {
+				// 已经有锁仓计划，并且欠释放金额（NeedRelease) >= 此次追加的锁仓金额
+				// 那么锁仓计划的欠释放金额（NeedRelease)中的totalAmount部分，可以直接释放给account（因为有from补充资金了）
+				// 发现没有？totalAmount从form -> RestrictingContractAddr -> account
+				// 相当于：锁仓合约本来欠account共NeedRelease， from帮锁仓合约给了account部分欠款totalAmount，那么锁仓合约欠account的也就少了totalAmount。
 				restrictInfo.NeedRelease.Sub(restrictInfo.NeedRelease, totalAmount)
 				rp.transferAmount(state, vm.RestrictingContractAddr, account, totalAmount)
 			} else {
+				// 已经有锁仓计划，并且欠释放金额（NeedRelease) < 此次追加的锁仓金额
+				// 所有欠释放金额（NeedRelease)，全部转入account
 				rp.transferAmount(state, vm.RestrictingContractAddr, account, restrictInfo.NeedRelease)
+
+				// 新追加的资金，减去这次发放的欠释放的资金，剩下的全部转入锁仓计划
 				totalAmount.Sub(totalAmount, restrictInfo.NeedRelease)
 				restrictInfo.CachePlanAmount.Add(restrictInfo.CachePlanAmount, totalAmount)
 				restrictInfo.NeedRelease = new(big.Int).SetInt64(0)
 			}
 		} else {
+			//已有锁仓计划，但是没有待释放的金额
+			//则总的CachePlanAmount = CachePlanAmount + totalAmount
 			restrictInfo.CachePlanAmount.Add(restrictInfo.CachePlanAmount, totalAmount)
 		}
 		for epoch, releaseAmount := range totalPlans {
