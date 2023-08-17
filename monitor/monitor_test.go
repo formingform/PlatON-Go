@@ -88,7 +88,7 @@ func TestLoadProxyPatternMap(t *testing.T) {
 	selfInfo := NewContractInfo(common.Address{0x01}, []byte{0x01})
 	targetInfo := NewContractInfo(common.Address{0x02}, []byte{0x01})
 
-	dbMapKey := proxyPatternMapKey.String()
+	dbMapKey := proxyPatternFlagKey.String()
 	MonitorInstance().monitordb.Delete([]byte(dbMapKey))
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbMapKey))

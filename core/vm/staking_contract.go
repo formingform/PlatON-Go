@@ -918,6 +918,12 @@ func (stkc *StakingContract) getHistoryVerifierList(blockNumber *big.Int) ([]byt
 		callResultHandler(stkc.Evm, "getHistoryVerifierList",
 			arr, staking.ErrGetVerifierList.Wrap(err.Error()))
 	}
+
+	if (err != nil && strings.Contains(err.Error(), "not found")) || arr.IsEmpty() {
+		return callResultHandler(stkc.Evm, "getHistoryVerifierList",
+			arr, staking.ErrGetVerifierList.Wrap("VerifierList info is not found")), nil
+	}
+
 	arrByte, _ := json.Marshal(arr)
 
 	// todo test
@@ -938,7 +944,7 @@ func (stkc *StakingContract) getValidatorList() ([]byte, error) {
 			arr, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
 
-	if strings.Contains(err.Error(), "not found") || arr.IsEmpty() {
+	if (err != nil && strings.Contains(err.Error(), "not found")) || arr.IsEmpty() {
 		return callResultHandler(stkc.Evm, "getValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap("ValidatorList info is not found")), nil
 	}
@@ -956,7 +962,7 @@ func (stkc *StakingContract) getHistoryValidatorList(blockNumber *big.Int) ([]by
 			arr, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
 
-	if strings.Contains(err.Error(), "not found") || arr.IsEmpty() {
+	if (nil != err && strings.Contains(err.Error(), "not found")) || arr.IsEmpty() {
 		return callResultHandler(stkc.Evm, "getHistoryValidatorList",
 			arr, staking.ErrGetValidatorList.Wrap("ValidatorList info is not found")), nil
 	}
@@ -967,9 +973,9 @@ func (stkc *StakingContract) getHistoryValidatorList(blockNumber *big.Int) ([]by
 
 func (stkc *StakingContract) getHistoryReward(blockNumber *big.Int) ([]byte, error) {
 	//blockHash := stkc.Evm.Context.BlockHash
-
 	reward, err := stkc.Plugin.GetHistoryReward(blockNumber.Uint64())
-	if !strings.Contains(err.Error(), "not found") {
+
+	if err != nil && !strings.Contains(err.Error(), "not found") {
 		return callResultHandler(stkc.Evm, "getHistoryReward",
 			reward, staking.ErrGetValidatorList.Wrap(err.Error())), nil
 	}
