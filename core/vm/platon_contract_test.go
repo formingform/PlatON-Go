@@ -19,6 +19,7 @@ package vm
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -315,6 +316,7 @@ func newEvm(blockNumber *big.Int, blockHash common.Hash, chain *mock.Chain) *EVM
 	}
 	evm.Context = context
 
+	xcom.GetEc(xcom.DefaultUnitTestNet)
 	//set a default active version
 	gov.InitGenesisGovernParam(common.ZeroHash, chain.SnapDB, 2048)
 	gov.AddActiveVersion(initProgramVersion, 0, chain.StateDB)
@@ -1060,3 +1062,54 @@ func setVerifierList(blockHash common.Hash, valArr *staking.ValidatorArray) erro
 
 	return nil
 }
+
+func TestRlpEncoder(t *testing.T) {
+	innerContract := &RestrictingContract{}
+	args, _ := hexutil.Decode("0xf85a83820fa09594c9e1c2b330cf7e759f2493c5c754b34d98b07f93b83ef83ccb0189056bc75e2d63100000cb0289056bc75e2d63100000cb0389056bc75e2d63100000cb0489056bc75e2d63100000cb0589056bc75e2d63100000")
+
+	fnCode, _, params, _ := plugin.VerifyTxData(args, innerContract.FnSigns())
+
+	t.Log("fnCode:", fnCode)
+
+	var fnParams []interface{}
+	for _, v := range params {
+		fnParams = append(fnParams, v.Interface())
+	}
+
+	t.Log("fnParams:", string(common.ToJson(fnParams)))
+
+}
+
+/*func TestCollectImplicitPPOSTx(t *testing.T) {
+	monitor.SetDbFullPath("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
+	db := rawdb.NewMemoryDatabase()
+	stateDb, _ := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, nil))
+	//monitor.SetDbFullPath("./log")
+	monitor.InitMonitor(stateDb)
+
+	blockNumber := uint64(12)
+	txHash := common.Hash{0x021, 0x02, 0x3, 0x9, 0x4}
+	dbKey := monitor.ProxyPatternKey.String() + "_" + txHash.String()
+	monitor.MonitorInstance().Monitordb().Delete([]byte(dbKey))
+
+	innerContract := &RestrictingContract{}
+	args, _ := hexutil.Decode("0xf85a83820fa09594c9e1c2b330cf7e759f2493c5c754b34d98b07f93b83ef83ccb0189056bc75e2d63100000cb0289056bc75e2d63100000cb0389056bc75e2d63100000cb0489056bc75e2d63100000cb0589056bc75e2d63100000")
+
+	fnCode, _, params, _ := plugin.VerifyTxData(args, innerContract.FnSigns())
+
+	ret := make([]byte, 8)
+	binary.BigEndian.PutUint16(ret, uint16(0))
+
+	logData, _ := hexutil.Decode("0xf869308382271095940102030000000000000000000000000000000000b842b840102030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008988746573744e6f6465")
+	itsLog := &types.Log{Data: logData}
+
+	monitor.MonitorInstance().CollectImplicitPPOSTx(blockNumber, txHash, common.Address{0x01}, common.Address{0x02}, fnCode, params, ret, itsLog)
+
+	txs := monitor.MonitorInstance().GetImplicitPPOSTx(blockNumber, txHash)
+	json := common.ToJson(txs)
+	fmt.Println("txs=", string(json))
+
+	monitor.MonitorInstance().Monitordb().Delete([]byte(dbKey))
+
+}
+*/

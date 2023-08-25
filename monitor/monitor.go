@@ -2,9 +2,12 @@ package monitor
 
 import (
 	"bytes"
+	"encoding/binary"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
+	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
 	"github.com/PlatONnetwork/PlatON-Go/core/state"
+	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"math/big"
 	"sync"
@@ -56,6 +59,21 @@ func InitMonitor(statedb *state.StateDB) {
 
 	})
 }
+func InitMonitorForUnitTest(monitorDbFullPath string) {
+	onceMonitor.Do(func() {
+		dbFullPath = monitorDbFullPath
+		db := rawdb.NewMemoryDatabase()
+		statedb, _ := state.New(common.Hash{}, state.NewDatabaseWithConfig(db, nil))
+
+		if levelDB, err := openLevelDB(16, 500); err != nil {
+			log.Crit("init monitor db fail", "err", err)
+		} else {
+			dbInstance := &monitorDB{path: dbFullPath, levelDB: levelDB, closed: false}
+			monitor = &Monitor{statedb: statedb, monitordb: dbInstance}
+		}
+	})
+}
+
 func MonitorInstance() *Monitor {
 	return monitor
 }
@@ -64,6 +82,9 @@ func (m *Monitor) SetStakingPlugin(pluginImpl Intf_stakingPlugin) {
 }
 func (m *Monitor) SetRestrictingPlugin(pluginImpl Intf_restrictingPlugin) {
 	monitor.restrictingPlugin = pluginImpl
+}
+func (m *Monitor) Monitordb() *monitorDB {
+	return monitor.monitordb
 }
 
 /*type ProxyInfo struct {
@@ -284,9 +305,10 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 
 // 收集隐式的ppos交易数据
 // 新方式（暂时未启用
-func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input, result []byte) {
-	log.Debug("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.String(), "to", to.String(), "input", hexutil.Encode(input), "result", hexutil.Encode(result))
-
+func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input []byte, ret []byte, itsLog *types.Log) {
+	errCode := binary.BigEndian.Uint16(ret)
+	inputHex := hexutil.Encode(input)
+	log.Debug("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.String(), "to", to.String(), "input", inputHex, "errCode", errCode)
 	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -294,15 +316,15 @@ func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, 
 		return
 	}
 
-	var implicitPPOSTx *ImplicitPPOSTx
-	if len(data) == 0 {
-		implicitPPOSTx = &ImplicitPPOSTx{PPOSTxMap: make(map[common.Hash][]*PPOSTx)}
-	} else {
-		common.ParseJson(data, &implicitPPOSTx)
+	newElement := ImplicitPPOSTx{From: from, To: to, InputHex: inputHex, LogDataHex: hexutil.Encode(itsLog.Data)}
+
+	var implicitPPOSTxs []*ImplicitPPOSTx
+	if len(data) > 0 {
+		common.ParseJson(data, &implicitPPOSTxs)
 	}
-	contractTx := &PPOSTx{From: from, To: to, Input: input, Result: result}
-	implicitPPOSTx.PPOSTxMap[txHash] = append(implicitPPOSTx.PPOSTxMap[txHash], contractTx)
-	json := common.ToJson(implicitPPOSTx)
+	implicitPPOSTxs = append(implicitPPOSTxs, &newElement)
+
+	json := common.ToJson(implicitPPOSTxs)
 	if len(json) > 0 {
 		m.monitordb.Put([]byte(dbKey), json)
 	}

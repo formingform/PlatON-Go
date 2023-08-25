@@ -17,11 +17,10 @@
 package vm
 
 import (
-	"bytes"
 	"encoding/hex"
 	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/byteutil"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
+	"github.com/PlatONnetwork/PlatON-Go/common/vm"
 	"github.com/PlatONnetwork/PlatON-Go/core/types"
 	"github.com/PlatONnetwork/PlatON-Go/log"
 	"github.com/PlatONnetwork/PlatON-Go/monitor"
@@ -734,41 +733,36 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 	callContext.contract.Gas += returnGas
 
 	if IsPlatONPrecompiledContract(toAddr, true) {
-		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
+		//saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
 
-		//从args分析出fnCode，从ret分析出执行结果
+		//从args分析出fnCode，从ret分析出内置合约执行结果
 		//然后根据需要记录关注的交易和结果
-		if len(args) > 0 {
-			var input [][]byte
-			err0 := rlp.Decode(bytes.NewReader(args), &input)
+		if toAddr != vm.ValidatorInnerContractAddr && toAddr != vm.VrfInnerContractAddr {
+			logs := interpreter.evm.StateDB.GetLogs(interpreter.evm.StateDB.TxHash())
+			itslog := logs[len(logs)-1]
+			monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret, itslog)
 
-			if nil != err0 {
-				log.Error("Failed to Verify PlatON inner contract tx data, Decode rlp input failed", "err", err0)
-			} else {
-				for _, arg := range input {
-					log.Warn("invoke inner contract", "contract", toAddr.Hex(), "arg", arg)
-				}
-				fnCode := byteutil.BytesToUint16(input[0])
-				switch fnCode {
-				case 1000: //CreateStaking
-				case 2003: //vote proposal
-				}
-			}
-			//当err是BizError时，返回的[]byte是，string(BizError.Code)；如果是普通error，则返回的[]byte是nil
-			if err != nil {
-				if len(ret) == 0 {
-					//调用合约的运行时error
-				} else {
-					//合约的bizError
-					//bizErrorCode := string(ret)
-				}
-			} else {
+			/*innerContract := PlatONPrecompiledContracts[toAddr]
+			fnCode, _, params, verifyErr := plugin.VerifyTxData(args, innerContract.(PlatONPrecompiledContract).FnSigns())
+			if verifyErr == nil {
 				//todo: 如果用户合约中，两次调用内置合约，第一次成功，第二次失败，那么第一次成功的状态会回滚吗；
-				//或者内置合约调用成功，后续执行用户合约逻辑失败，那么内置合约的状态会回滚吗？
-				monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
-			}
-		}
+				//或者内置合约调用成功，后续执行用户合约逻辑失败，那么内置合约的状态会回滚吗？（这个先执行，没办法知道整个交易是否成功。这里，只要call 内置合约成功，就记录）
+				//不管内置合约是否执行成功ret =[]byte{0x00}, 大于0的为BizError.code
+				//当内置合约执行正确时, err==nil, 并且 ret = []{0x00}
+				//当内置合约执行失败时, err!=nil && err.(BizError) == oK，并且 ret = []{BizError.code}
+				//所以只要把ret返回即可。判断retHex=="0x00"
 
+				//log已经包含errCode
+				logs := interpreter.evm.StateDB.GetLogs(interpreter.evm.StateDB.TxHash())
+				itslog := logs[len(logs)-1]
+
+				var fnParams []interface{}
+				for _, v := range params {
+					fnParams = append(fnParams, v.Interface())
+				}
+				monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, fnCode, params, ret, itslog)
+			}*/
+		}
 	}
 
 	return ret, nil
@@ -837,9 +831,30 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCt
 
 	if IsPlatONPrecompiledContract(toAddr, true) {
 		//旧方式
-		saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
-		//新方式（暂时未启用）
-		monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret)
+		//saveTransData(interpreter, args, callContext.contract.CallerAddress.Bytes(), addr.Bytes(), string(ret))
+		//从args分析出fnCode，从ret分析出内置合约执行结果
+		//然后根据需要记录关注的交易和结果
+		if toAddr != vm.ValidatorInnerContractAddr && toAddr != vm.VrfInnerContractAddr {
+			logs := interpreter.evm.StateDB.GetLogs(interpreter.evm.StateDB.TxHash())
+			itslog := logs[len(logs)-1]
+			monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, args, ret, itslog)
+
+			/*innerContract := PlatONPrecompiledContracts[toAddr]
+			fnCode, _, params, verifyErr := plugin.VerifyTxData(args, innerContract.(PlatONPrecompiledContract).FnSigns())
+			if verifyErr == nil {
+				//todo: 如果用户合约中，两次调用内置合约，第一次成功，第二次失败，那么第一次成功的状态会回滚吗；
+				//或者内置合约调用成功，后续执行用户合约逻辑失败，那么内置合约的状态会回滚吗？（这个先执行，没办法知道整个交易是否成功。这里，只要call 内置合约成功，就记录）
+				//不管内置合约是否执行成功ret =[]byte{0x00}, 大于0的为BizError.code
+				//当内置合约执行正确时, err==nil, 并且 ret = []{0x00}
+				//当内置合约执行失败时, err!=nil && err.(BizError) == oK，并且 ret = []{BizError.code}
+				//所以只要把ret返回即可。判断retHex=="0x00"
+				//log已经包含errCode
+				logs := interpreter.evm.StateDB.GetLogs(interpreter.evm.StateDB.TxHash())
+				itslog := logs[len(logs)-1]
+				monitor.MonitorInstance().CollectImplicitPPOSTx(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.self.Address(), toAddr, fnCode, params, ret, itslog)
+			}*/
+		}
+
 	}
 
 	// TODO:
@@ -1044,7 +1059,7 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	flag := true                  //缺省，当前txHash没有保存过
 	for _, v := range transHash { //在已经保存的txHash列表中查询是否有当前txHash
 		if v == txHash {
-			log.Info("saveTransBlock agagin ", "input", input)
+			log.Info("saveTransBlock again ", "input", input)
 			flag = false
 			break
 		}
@@ -1096,7 +1111,7 @@ func saveTransData(interpreter *EVMInterpreter, inputData, from, to []byte, code
 	}
 	//todo： 这个结构关系有点奇怪，相同的from/to，会有多组input/code?
 	plugin.STAKING_DB.HistoryDB.Put([]byte(transKey), transHashByte)
-	log.Debug("saveTransData success")
+	log.Info("saveTransData success", "blockNumber", blockNum, "txHash", txHash, "inputHex", input, "result", code)
 }
 
 /*func saveContractCreate(interpreter *EVMInterpreter, input []byte, addr common.Address, err error) {
@@ -1183,14 +1198,15 @@ func inspectZeppelinStandardProxyPattern(evm *EVM, caller ContractRef, selfInfo,
 	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
 	evm.vmConfig.ProxyInspected = true
 
-	isPorxyPattern := false
+	isProxyPattern := false
 
 	implAddrBytes := evm.StateDB.GetState(selfInfo.Address, IMPLEMENTATION_SLOT)
 	implAddress := common.BytesToAddress(implAddrBytes)
 	if targetInfo.Address == implAddress {
-		isPorxyPattern = true
 		if selfInfo.Type == monitor.EVM {
 			if targetInfo.Type == monitor.ERC20 {
+				isProxyPattern = true
+
 				selfNameBytes, nameErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 				selfSymbolBytes, symbolErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
 				selfDecimalsBytes, decimalsErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForDecimals)
@@ -1206,6 +1222,8 @@ func inspectZeppelinStandardProxyPattern(evm *EVM, caller ContractRef, selfInfo,
 					targetInfo.TokenTotalSupply = selfTotalSupply
 				}
 			} else if targetInfo.Type == monitor.ERC721 {
+				isProxyPattern = true
+
 				if targetInfo.IsSupportErc721Metadata {
 					selfNameBytes, nameErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForName)
 					selfSymbolBytes, symbolErr := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForSymbol)
@@ -1227,7 +1245,7 @@ func inspectZeppelinStandardProxyPattern(evm *EVM, caller ContractRef, selfInfo,
 		}
 	}
 
-	return isPorxyPattern
+	return isProxyPattern
 }
 
 func inspectCommonProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInfo *monitor.ContractInfo) bool {
@@ -1235,6 +1253,7 @@ func inspectCommonProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInf
 
 	log.Debug("set vmConfig.ProxyInspected = true", "vmConfig.NoRecursion", evm.vmConfig.NoRecursion)
 	evm.vmConfig.ProxyInspected = true
+	isProxyPattern := false
 
 	if selfInfo.Type == monitor.EVM {
 		if targetInfo.Type == monitor.ERC20 { //the target bin seems as an ERC20
@@ -1275,9 +1294,9 @@ func inspectCommonProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInf
 					targetInfo.TokenSymbol = selfSymbol
 					targetInfo.TokenDecimals = selfDecimals
 					targetInfo.TokenTotalSupply = selfTotalSupply
-					return true
+					//真正确认是代理关系
+					isProxyPattern = true
 				}
-
 			}
 		} else if targetInfo.Type == monitor.ERC721 {
 			if targetInfo.IsSupportErc721Metadata {
@@ -1298,22 +1317,23 @@ func inspectCommonProxyPattern(evm *EVM, caller ContractRef, selfInfo, targetInf
 						len(selfSymbol) > 0 && len(targetSymbol) == 0 {
 						targetInfo.TokenName = selfName
 						targetInfo.TokenSymbol = selfSymbol
-						return true
+						//真正确认是代理关系
+						isProxyPattern = true
 					}
 				}
 			}
-			if targetInfo.IsSupportErc721Enumerable {
+			if isProxyPattern && targetInfo.IsSupportErc721Enumerable {
 				selfTotalSupplyBytes, totalSupplyErr1 := evm.StaticCallNoCost(caller, selfInfo.Address, monitor.InputForTotalSupply)
 				targetTotalSupplyBytes, totalSupplyErr2 := evm.StaticCallNoCost(caller, targetInfo.Address, monitor.InputForTotalSupply)
 				if totalSupplyErr1 == nil && totalSupplyErr2 == nil {
 					selfTotalSupply := monitor.UnpackTotalSupply(selfTotalSupplyBytes)
 					targetTotalSupply := monitor.UnpackTotalSupply(targetTotalSupplyBytes)
-					if selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC20's init supply could be 0
+					if selfTotalSupply.Cmp(big0) >= 0 && targetTotalSupply.Cmp(big0) == 0 { //ERC721's init supply could be 0
 						targetInfo.TokenTotalSupply = selfTotalSupply
 					}
 				}
 			}
 		}
 	}
-	return false
+	return isProxyPattern
 }

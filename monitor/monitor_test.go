@@ -1,16 +1,21 @@
 package monitor
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common"
 	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
+	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/PlatONnetwork/PlatON-Go/x/reward"
 	"math/big"
+	"reflect"
 	"testing"
 )
 
 func TestCollectEmbedTransfer(t *testing.T) {
-	SetDbFullPath("/home/joey/monitor_db")
+	InitMonitorForUnitTest("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
 
 	blockNumber := uint64(1000)
 	txHash := common.Hash{0x01, 0x02, 0x03}
@@ -26,7 +31,8 @@ func TestCollectEmbedTransfer(t *testing.T) {
 }
 
 func TestMarshalProxyPattern(t *testing.T) {
-	SetDbFullPath("/home/joey/monitor_db")
+	InitMonitorForUnitTest("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
+
 	proxyBin := "0x60803461011557601f61069738819003918201601f19168301916001600160401b0383118484101761011a5780849260209460405283398101031261011557516001600160a01b038116810361011557803b156100aa577f7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c355337f10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b5560405161056690816101318239f35b60405162461bcd60e51b815260206004820152603b60248201527f43616e6e6f742073657420612070726f787920696d706c656d656e746174696f60448201527f6e20746f2061206e6f6e2d636f6e7472616374206164647265737300000000006064820152608490fd5b600080fd5b634e487b7160e01b600052604160045260246000fdfe6080604052600436101561001d575b3661034d5761001b6104db565b005b6000803560e01c9081633659cfe614610070575080634f1ef2861461006b5780635c60da1b146100665780638f283970146100615763f851a4400361000e576102fa565b610205565b6101bd565b6100d9565b346100bb5760203660031901126100bb576100896100be565b60008051602061051183398151915254336001600160a01b03909116036100b6576100b39061040d565b80f35b61034d565b80fd5b600435906001600160a01b03821682036100d457565b600080fd5b60403660031901126100d4576100ed6100be565b60243567ffffffffffffffff918282116100d457366023830112156100d4578160040135908382116100d45736602483850101116100d45760008051602061051183398151915254336001600160a01b03909116036100b657600092839261015660249361040d565b806040519384930183378101838152039034305af13d156101b3573d8281116101ae5760405190601f19603f81601f8401160116820193828510908511176101ae5761001b936040528152600060203d92013e610346565b610330565b61001b9150610346565b346100d45760003660031901126100d4577f7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3546040516001600160a01b039091168152602090f35b346100d45760203660031901126100d45761021e6100be565b60008051602061051183398151915280546001600160a01b0392919033908416036100b6578282169081156102965761001b937f7e644d79422f17c01e4894b5f4f588d331ebfa28653d42ae832dc59e38c9798f9260409254918351921682526020820152a160008051602061051183398151915255565b60405162461bcd60e51b815260206004820152603660248201527f43616e6e6f74206368616e6765207468652061646d696e206f6620612070726f604482015275787920746f20746865207a65726f206164647265737360501b6064820152608490fd5b346100d45760003660031901126100d457600080516020610511833981519152546040516001600160a01b039091168152602090f35b634e487b7160e01b600052604160045260246000fd5b156100d457565b600080516020610511833981519152546001600160a01b031633146103ad577f7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3546000808092368280378136915af43d82803e156103a9573d90f35b3d90fd5b60405162461bcd60e51b815260206004820152603260248201527f43616e6e6f742063616c6c2066616c6c6261636b2066756e6374696f6e20667260448201527137b6903a343290383937bc3c9030b236b4b760711b6064820152608490fd5b803b15610470577f7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c38190556040516001600160a01b0390911681527fbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b90602090a1565b60405162461bcd60e51b815260206004820152603b60248201527f43616e6e6f742073657420612070726f787920696d706c656d656e746174696f60448201527f6e20746f2061206e6f6e2d636f6e7472616374206164647265737300000000006064820152608490fd5b346104e257565b6040513481527f88a5966d370b9919b20f3e2c13ff65706f196a4e32cc2c12bf57088f8852587460203392a256fe10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390ba26469706673582212204f2537ff54591fa9701f3ccab6d8f7d507f7a6fc0e95d1a405bb4ff00163d49264736f6c63430008130033"
 
 	proxyCode, err := hexutil.Decode(proxyBin)
@@ -54,7 +60,8 @@ func TestMarshalProxyPattern(t *testing.T) {
 }
 
 func TestLoadProxyPattern(t *testing.T) {
-	SetDbFullPath("/home/joey/monitor_db")
+	InitMonitorForUnitTest("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
+
 	selfInfo := NewContractInfo(common.Address{0x01}, []byte{0x01})
 	targetInfo := NewContractInfo(common.Address{0x022}, []byte{0x041})
 
@@ -64,7 +71,7 @@ func TestLoadProxyPattern(t *testing.T) {
 	MonitorInstance().monitordb.Delete([]byte(dbKey))
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy patterns", "err", err)
+		t.Fatal("failed to load proxy patterns", "err", err)
 		return
 	}
 
@@ -73,17 +80,16 @@ func TestLoadProxyPattern(t *testing.T) {
 	proxyPatternList = append(proxyPatternList, &ProxyPattern{Proxy: selfInfo, Implementation: targetInfo})
 
 	json := common.ToJson(proxyPatternList)
-	fmt.Println("json:" + string(json))
+	t.Log("json:", string(json))
 	if len(json) > 0 {
 		MonitorInstance().monitordb.Put([]byte(dbKey), json)
-		log.Debug("save proxy patterns success")
+		fmt.Println("save proxy patterns success")
 	}
 
 }
 
 func TestLoadProxyPatternMap(t *testing.T) {
-
-	SetDbFullPath("/home/joey/monitor_db")
+	InitMonitorForUnitTest("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
 
 	selfInfo := NewContractInfo(common.Address{0x01}, []byte{0x01})
 	targetInfo := NewContractInfo(common.Address{0x02}, []byte{0x01})
@@ -93,7 +99,7 @@ func TestLoadProxyPatternMap(t *testing.T) {
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbMapKey))
 	if nil != err && err != ErrNotFound {
-		log.Error("failed to load proxy map", "err", err)
+		t.Fatal("failed to load proxy map", "err", err)
 		return
 	}
 
@@ -105,9 +111,99 @@ func TestLoadProxyPatternMap(t *testing.T) {
 	proxyPatternMap[selfInfo.Address] = targetInfo.Address
 
 	json := common.ToJson(proxyPatternMap)
-	fmt.Println("json:" + string(json))
+	t.Log("json:", string(json))
 	if len(json) > 0 {
 		MonitorInstance().monitordb.Put([]byte(dbMapKey), json)
-		log.Debug("save proxy map success")
+		t.Fatal("save proxy map success")
 	}
+}
+
+func TestPPOSTxJson(t *testing.T) {
+	bigValue, _ := new(big.Int).SetString("678000000000000000000000", 10)
+	nullValue := ""
+	var nilValue *big.Int
+	nilValue = nil
+	fnParamValues := []reflect.Value{reflect.ValueOf(common.Address{0x01}), reflect.ValueOf(uint64(120000)), reflect.ValueOf(nullValue), reflect.ValueOf(nilValue), reflect.ValueOf(bigValue)}
+
+	var fnParams []interface{}
+	for _, v := range fnParamValues {
+		fnParams = append(fnParams, v.Interface())
+	}
+
+	inputHex := "0xf85a83820fa09594c9e1c2b330cf7e759f2493c5c754b34d98b07f93b83ef83ccb0189056bc75e2d63100000cb0289056bc75e2d63100000cb0389056bc75e2d63100000cb0489056bc75e2d63100000cb0589056bc75e2d63100000"
+	logData := "0xf869308382271095940102030000000000000000000000000000000000b842b840102030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008988746573744e6f6465"
+	var implicitPPOSTxs []*ImplicitPPOSTx
+	newElement := ImplicitPPOSTx{From: common.Address{0x01}, To: common.Address{0x02}, InputHex: inputHex, LogDataHex: logData}
+	implicitPPOSTxs = append(implicitPPOSTxs, &newElement)
+
+	json := string(common.ToJson(implicitPPOSTxs))
+	t.Log("implicitPPOSTxs:", json)
+
+}
+
+/*func TestCollectImplicitPPOSTx(t *testing.T){
+	SetDbFullPath("D:\\github.com\\formingform\\PlatON-Go\\monitor_db")
+
+	txHash := common.Hash{0x021, 0x02, 0x3, 0x9, 0x4}
+
+	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
+	MonitorInstance().monitordb.Delete([]byte(dbKey))
+	MonitorInstance().CollectImplicitPPOSTx(uint64(12), txHash, common.Address{0x01}, common.Address{0x02}, uint16(4000), fnParamValues []reflect.Value, ret []byte, itsLog *types.Log)
+}*/
+
+func TestAddLogWithRes(t *testing.T) {
+	event := "testCreateStaking"
+	code := "0"
+	datas := []interface{}{big.NewInt(10000), common.Address{0x01, 0x02, 0x03}, discover.NodeID{0x10, 0x20, 0x30}, "testNode"}
+
+	buf := new(bytes.Buffer)
+	logData := [][]byte{[]byte(code)}
+	if len(datas) != 0 && datas[0] != nil {
+		for _, res := range datas {
+			resByte, err := rlp.EncodeToBytes(res)
+			if err != nil {
+				log.Error("Cannot RlpEncode the log datas", "datas", datas, "err", err, "event", event)
+				panic("Cannot RlpEncode the log data")
+			}
+			logData = append(logData, resByte)
+		}
+	}
+	if err := rlp.Encode(buf, logData); nil != err {
+		log.Error("Cannot RlpEncode the log data", "data", code, "err", err, "event", event)
+		panic("Cannot RlpEncode the log data")
+	}
+	t.Log("logData:", hexutil.Encode(buf.Bytes()))
+	//0xf869308382271095940102030000000000000000000000000000000000b842b840102030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008988746573744e6f6465
+}
+
+func TestAddWithdrawDelegateRewardLogWithRes(t *testing.T) {
+	event := "WithdrawDelegateReward"
+	code := "0"
+
+	reward1 := reward.NodeDelegateReward{NodeID: discover.NodeID{0x01}, StakingNum: uint64(1000), Reward: big.NewInt(1000000000)}
+	reward2 := reward.NodeDelegateReward{NodeID: discover.NodeID{0x02}, StakingNum: uint64(2000), Reward: big.NewInt(2000000000)}
+	rewards := []reward.NodeDelegateReward{}
+	rewards = append(rewards, reward1)
+	rewards = append(rewards, reward2)
+
+	datas := []interface{}{rewards}
+
+	buf := new(bytes.Buffer)
+	logData := [][]byte{[]byte(code)}
+	if len(datas) != 0 && datas[0] != nil {
+		for _, res := range datas {
+			resByte, err := rlp.EncodeToBytes(res)
+			if err != nil {
+				log.Error("Cannot RlpEncode the log datas", "datas", datas, "err", err, "event", event)
+				panic("Cannot RlpEncode the log data")
+			}
+			logData = append(logData, resByte)
+		}
+	}
+	if err := rlp.Encode(buf, logData); nil != err {
+		log.Error("Cannot RlpEncode the log data", "data", code, "err", err, "event", event)
+		panic("Cannot RlpEncode the log data")
+	}
+	t.Log("WithdrawDelegateReward logData:", hexutil.Encode(buf.Bytes()))
+	//0xf869308382271095940102030000000000000000000000000000000000b842b840102030000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008988746573744e6f6465
 }
