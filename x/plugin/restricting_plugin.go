@@ -519,6 +519,10 @@ func (rp *RestrictingPlugin) getRestrictingInfo(state xcom.StateDB, account comm
 	return restrictingKey, restrictInfoByte
 }
 
+func (rp *RestrictingPlugin) MustGetRestrictingInfoByDecode(state xcom.StateDB, account common.Address) ([]byte, restricting.RestrictingInfo, *common.BizError) {
+	return rp.mustGetRestrictingInfoByDecode(state, account)
+}
+
 func (rp *RestrictingPlugin) mustGetRestrictingInfoByDecode(state xcom.StateDB, account common.Address) ([]byte, restricting.RestrictingInfo, *common.BizError) {
 	var restrictInfo restricting.RestrictingInfo
 	restrictingKey, restrictInfoByte := rp.getRestrictingInfo(state, account)

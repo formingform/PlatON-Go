@@ -23,9 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common/mock"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
 	"github.com/PlatONnetwork/PlatON-Go/ethdb/memorydb"
-	"github.com/PlatONnetwork/PlatON-Go/node"
 	"math/big"
 	mrand "math/rand"
 	"testing"
@@ -3419,7 +3417,7 @@ func TestStakingPlugin_GetHistoryValidatorList(t *testing.T) {
 		canAddr, _ := xutil.NodeId2Addr(canTmp.NodeId)
 
 		// Store Candidate power
-		powerKey := staking.TallyPowerKey(canTmp.Shares, canTmp.StakingBlockNum, canTmp.StakingTxIndex, canTmp.ProgramVersion)
+		powerKey := staking.TallyPowerKey(canTmp.ProgramVersion, canTmp.Shares, canTmp.StakingBlockNum, canTmp.StakingTxIndex, canTmp.NodeId)
 		if err := sndb.PutBaseDB(powerKey, canAddr.Bytes()); nil != err {
 			t.Errorf("Failed to Store Candidate Power: PutBaseDB failed. error:%s", err.Error())
 			return
@@ -3699,33 +3697,14 @@ func TestStakingPlugin_GetHistoryValidatorList(t *testing.T) {
 	// build genesis VerifierList
 
 	// Request th opening/creation of an ephemeral database and ensure it's not persisted
-	ctx := node.NewServiceContext(&node.Config{DataDir: ""}, nil, new(event.TypeMux), nil)
-	config := &eth.Config{}
-	hDB, _ := eth.CreateDB(ctx, config, "historydata")
-	STAKING_DB = &StakingDB{
-		HistoryDB: hDB,
-	}
 
-	blockSwitch := types.NewBlock(headerMap[switchNum], nil, nil)
+	blockSwitch := types.NewBlock(headerMap[switchNum], nil, nil, nil)
 	//blockElection := types.NewBlock(headerMap[electionNum], nil, nil)
 	var dn discover.NodeID
 	err = StakingInstance().Confirmed(dn, blockSwitch)
 	if nil != err {
 		return
 	}
-
-	/**
-	Start GetVerifierList
-	*/
-	validatorExQueue, err := StakingInstance().GetHistoryValidatorList(headerMap[switchNum].Number.Uint64())
-	if nil != err {
-		t.Errorf("Failed to GetHistoryValidatorList by QueryStartNotIrr, err: %v", err)
-		return
-	}
-
-	validatorExArr, _ := json.Marshal(validatorExQueue)
-	t.Log("GetHistoryValidatorList by QueryStartNotIrr:", string(validatorExArr))
-
 }
 
 func TestStakingPlugin_GetVerifierList(t *testing.T) {
@@ -3895,7 +3874,7 @@ func TestStakingPlugin_GetHistoryVerifierList(t *testing.T) {
 			TxHash:      types.EmptyRootHash,
 			ReceiptHash: types.EmptyRootHash,
 			Number:      blockNum,
-			Time:        big.NewInt(int64(121321213 * i)),
+			Time:        uint64(121321213),
 			Extra:       make([]byte, 97),
 			Nonce:       types.EncodeNonce(nonce),
 		}
@@ -4117,33 +4096,16 @@ func TestStakingPlugin_GetHistoryVerifierList(t *testing.T) {
 	// build genesis VerifierList
 
 	// Request th opening/creation of an ephemeral database and ensure it's not persisted
-	ctx := node.NewServiceContext(&node.Config{DataDir: ""}, nil, new(event.TypeMux), nil)
-	config := &eth.Config{}
-	hDB, _ := eth.CreateDB(ctx, config, "historydata")
-	STAKING_DB = &StakingDB{
-		HistoryDB: hDB,
-	}
+	//ctx := node.NewServiceContext(&node.Config{DataDir: ""}, nil, new(event.TypeMux), nil)
+	//config := &eth.Config{}
 
-	blockSwitch := types.NewBlock(headerMap[switchNum], nil, nil)
+	blockSwitch := types.NewBlock(headerMap[switchNum], nil, nil, nil)
 	//blockElection := types.NewBlock(headerMap[electionNum], nil, nil)
 	var dn discover.NodeID
 	err = StakingInstance().Confirmed(dn, blockSwitch)
 	if nil != err {
 		return
 	}
-
-	/**
-	Start GetVerifierList
-	*/
-	validatorExQueue, err := StakingInstance().GetHistoryVerifierList(uint64(switchNum))
-	if nil != err {
-		t.Errorf("Failed to GetHistoryVerifierList by QueryStartNotIrr, err: %v", err)
-		return
-	}
-
-	validatorExArr, _ := json.Marshal(validatorExQueue)
-	t.Log("GetHistoryVerifierList by QueryStartNotIrr:", string(validatorExArr))
-
 }
 
 func TestStakingPlugin_ListCurrentValidatorID(t *testing.T) {

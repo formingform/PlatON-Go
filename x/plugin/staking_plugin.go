@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common/sort"
 	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	math2 "math"
 	"math/big"
 	"math/rand"
 	"strconv"
@@ -56,12 +56,12 @@ import (
 )
 
 // 特殊节点在采集数据过程中，需要临时存储的数据，都存入此db。其实可以移动到一个专门的路径和文件中，参考中心化节点的做法。
-var STAKING_DB *StakingDB
+/*var STAKING_DB *StakingDB
 
 type StakingDB struct {
 	HistoryDB ethdb.Database
 }
-
+*/
 type StakingPlugin struct {
 	db                      *staking.StakingDB
 	eventMux                *event.TypeMux
@@ -311,6 +311,7 @@ func (sk *StakingPlugin) GetValidatorHistoryList(targetBlockNumber uint64) ([]*s
 	return resultList, nil
 }
 
+// 区块交易执行完成后执行
 func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, state xcom.StateDB) error {
 
 	epoch := xutil.CalculateEpoch(header.Number.Uint64())
@@ -348,59 +349,46 @@ func (sk *StakingPlugin) EndBlock(blockHash common.Hash, header *types.Header, s
 }
 
 func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) error {
-
 	log.Info("Call Confirmed on staking plugin", "blockNumber", block.Number(), "blockHash", block.Hash().String())
-	numStr := strconv.FormatUint(block.NumberU64(), 10)
+	//当区块=1时，要把当前的（内置）的共识节点保存到本地db以备后续查询
 	if block.NumberU64() == uint64(1) {
-
-		_, _, err := sk.SetValidator(block, "0", nodeId)
-		if nil != err {
-			log.Error("Failed to SetValidator on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
-		err = sk.SetVerifier(block, "0")
-		if nil != err {
-			log.Error("Failed to SetVerifier on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
-		err = sk.SetReward(block, "0")
-		if nil != err {
-			log.Error("Failed to SetReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
+		monitor.MonitorInstance().CollectInitValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+		monitor.MonitorInstance().CollectInitVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 	}
-	if xutil.IsElection(block.NumberU64()) {
+	if xutil.IsEndOfEpoch(block.NumberU64()) {
+		//当是end of epoch时，保存选出的下个epoch的201名单
+		monitor.MonitorInstance().CollectNextEpochVerifiers(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+	}
 
+	if xutil.IsElection(block.NumberU64()) {
+		//当前块高时选举块高时，要把先前20个区块选出的下一轮共识节点，保存到本地db以备后续查询
+		monitor.MonitorInstance().CollectNextEpochValidators(block.Hash(), block.NumberU64(), QueryStartNotIrr)
+
+		// 新的名单选出后，直接以[startBlock, endBlock]为区间的key，存储在snapshot db中。
+		// 不需要有切换验证人的动作，只需要根据块高去查询，即可以获取某个块高对应的验证人节点列表
 		next, err := sk.getNextValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
 			log.Error("Failed to Query Next validators on stakingPlugin Confirmed When Election block",
 				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
 			return err
 		}
-
-		diff := make(staking.ValidatorQueue, 0)
-		var isNext bool
-
-		numStr = strconv.FormatUint(block.NumberU64()+xcom.ElectionDistance(), 10)
-		isCurr, currMap, err := sk.SetValidator(block, numStr, nodeId)
+		current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
 		if nil != err {
-			log.Error("Failed to SetValidator on stakingPlugin Confirmed When Settletmetn block", "err", err)
+			log.Error("Failed to Query Current Round validators on stakingPlugin Confirmed When Election block",
+				"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
 			return err
 		}
 
-		//noCache := block.NumberU64() - xcom.GetDBCacheEpoch()*xutil.CalcBlocksEachEpoch()
-		//log.Debug("election begin check data, start remove old data", "noCache", noCache, " cache flag", xcom.GetDBDisabledCache())
-		//if xcom.GetDBDisabledCache() && noCache > uint64(0){
-		//	removeNum := strconv.FormatUint(noCache+xcom.ElectionDistance(), 10)
-		//	err := STAKING_DB.HistoryDB.Delete([]byte(ValidatorName + removeNum))
-		//	log.Debug("delete Validator suc","removeNum",removeNum)
-		//	if nil != err {
-		//		log.Error("remove old data err","err data", err.Error())
-		//	}
-		//}
+		diff := make(staking.ValidatorQueue, 0)
+		var isCurr, isNext bool
+
+		currMap := make(map[discover.NodeID]struct{})
+		for _, v := range current.Arr {
+			currMap[v.NodeId] = struct{}{}
+			if nodeId == v.NodeId {
+				isCurr = true
+			}
+		}
 
 		for _, v := range next.Arr {
 			if _, ok := currMap[v.NodeId]; !ok {
@@ -426,37 +414,6 @@ func (sk *StakingPlugin) Confirmed(nodeId discover.NodeID, block *types.Block) e
 			return nil
 		}
 	}
-
-	if xutil.IsEndOfEpoch(block.NumberU64()) {
-		// epoch结束块高，保存验证人信息
-		err := sk.SetVerifier(block, numStr)
-		if nil != err {
-			log.Error("Failed to SetVerifier on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		// epoch结束块高，保存验证出块奖励信息
-		err = sk.SetReward(block, numStr)
-		if nil != err {
-			log.Error("Failed to SetReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
-		//noCache := block.NumberU64() - xcom.GetDBCacheEpoch()*xutil.CalcBlocksEachEpoch()
-		//log.Debug("begin check epoch data, start remove old data", "noCache", noCache, " cache flag", xcom.GetDBDisabledCache())
-		//if xcom.GetDBDisabledCache() && noCache > uint64(0){
-		//	removeNum := strconv.FormatUint(noCache, 10)
-		//	err := STAKING_DB.HistoryDB.Delete([]byte(VerifierName + removeNum))
-		//	log.Debug("delete Verifier suc","removeNum",removeNum)
-		//	if nil != err {
-		//		log.Error("remove old data err","err data", err.Error())
-		//	}
-		//	err = STAKING_DB.HistoryDB.Delete([]byte(RewardName + removeNum))
-		//	if nil != err {
-		//		log.Error("remove old data err","err data", err.Error())
-		//	}
-		//}
-	}
-
 	log.Info("Finished Confirmed on staking plugin", "blockNumber", block.Number(), "blockHash", block.Hash().String())
 	return nil
 }
@@ -1721,135 +1678,6 @@ func (sk *StakingPlugin) GetVerifierList(blockHash common.Hash, blockNumber uint
 	return queue, nil
 }
 
-func (sk2 *StakingPlugin) GetHistoryVerifierList(blockNumber uint64) (staking.ValidatorExQueue, error) {
-
-	i := uint64(0)
-	if blockNumber != i {
-		i = xutil.CalculateEpoch(blockNumber)
-	}
-
-	queryNumber := i * xutil.CalcBlocksEachEpoch()
-	numStr := strconv.FormatUint(queryNumber, 10)
-	log.Debug("wow,GetHistoryVerifierList query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(VerifierName + numStr))
-	if nil != err {
-		return nil, err
-	}
-	var verifierList staking.ValidatorArraySave
-	err = rlp.DecodeBytes(data, &verifierList)
-	if nil != err {
-		return nil, err
-	}
-	log.Debug("wow,GetHistoryVerifierList", verifierList)
-
-	queue := make(staking.ValidatorExQueue, len(verifierList.Arr))
-
-	var candidateHexQueue staking.CandidateHexQueue
-
-	if queryNumber == 0 {
-		data, err := STAKING_DB.HistoryDB.Get([]byte(InitNodeName + numStr))
-		if nil != err {
-			return nil, err
-		}
-
-		err = rlp.DecodeBytes(data, &candidateHexQueue)
-		if nil != err {
-			return nil, err
-		}
-		log.Debug("wow,GetHistoryVerifierList candidateHexQueue", candidateHexQueue)
-	}
-	for i, v := range verifierList.Arr {
-
-		valEx := &staking.ValidatorEx{
-			NodeId:              v.NodeId,
-			ValidatorTerm:       v.ValidatorTerm,
-			DelegateRewardTotal: (*hexutil.Big)(v.DelegateRewardTotal),
-			DelegateTotal:       (*hexutil.Big)(v.DelegateTotal),
-			StakingBlockNum:     v.StakingBlockNum,
-		}
-		if queryNumber == 0 {
-			for _, vc := range candidateHexQueue {
-				if vc.NodeId == v.NodeId {
-					valEx.BenefitAddress = vc.BenefitAddress
-					valEx.StakingAddress = vc.StakingAddress
-					valEx.Website = vc.Website
-					valEx.Description = vc.Description
-					valEx.ExternalId = vc.ExternalId
-					valEx.NodeName = vc.NodeName
-					break
-				}
-			}
-		}
-		queue[i] = valEx
-	}
-
-	return queue, nil
-}
-
-func (sk *StakingPlugin) GetSlashData(blockNumber uint64) (staking.SlashNodeQueue, error) {
-	numStr := strconv.FormatUint(blockNumber, 10)
-	log.Debug("wow,GetSlashData query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(SlashName + numStr))
-	if nil != err {
-		return nil, err
-	}
-	var slashNodeQueue staking.SlashNodeQueue
-	err = rlp.DecodeBytes(data, &slashNodeQueue)
-	if nil != err {
-		return nil, err
-	}
-	snq := make(staking.SlashNodeQueue, len(slashNodeQueue))
-	for i, v := range slashNodeQueue {
-		snq[i] = &staking.SlashNodeData{
-			NodeId: v.NodeId,
-			Amount: v.Amount,
-		}
-	}
-	log.Debug("wow,GetSlashData", "snq", snq)
-	return snq, nil
-}
-
-func (sk *StakingPlugin) GetTransData(blockNumber uint64) (staking.TransBlockReturnQueue, error) {
-	numStr := strconv.FormatUint(blockNumber, 10)
-	log.Debug("wow,GetTransData query number:", "num string", numStr)
-	blockKey := TransBlockName + numStr
-	transKey := TransHashName + numStr
-
-	blockData, err := STAKING_DB.HistoryDB.Get([]byte(blockKey))
-	if nil != err {
-		return nil, err
-	}
-	var transBlock staking.TransBlock
-	err = rlp.DecodeBytes(blockData, &transBlock)
-	if nil != err {
-		return nil, err
-	}
-
-	transDataQuene := make(staking.TransBlockReturnQueue, len(transBlock.TransHashStr))
-
-	for i, v := range transBlock.TransHashStr {
-
-		transInputBytes, err := STAKING_DB.HistoryDB.Get([]byte(transKey + v))
-		if nil != err {
-			log.Error("get transData error", err)
-			continue
-		}
-		var transInput staking.TransInput
-		err = rlp.DecodeBytes(transInputBytes, &transInput)
-		if nil != err {
-			return nil, err
-		}
-		transDataQuene[i] = &staking.TransBlockReturn{
-			TxHash:     v,
-			From:       common.BytesToAddress(transInput.From),
-			To:         common.BytesToAddress(transInput.To),
-			TransDatas: transInput.TransDatas,
-		}
-	}
-	log.Debug("wow,GetTransData", "transDataQuene", transDataQuene)
-	return transDataQuene, nil
-}
-
 func (sk *StakingPlugin) IsCurrVerifier(blockHash common.Hash, blockNumber uint64, nodeId discover.NodeID, isCommit bool) (bool, error) {
 
 	verifierList, err := sk.getVerifierList(blockHash, blockNumber, isCommit)
@@ -2008,132 +1836,8 @@ func (sk *StakingPlugin) GetValidatorList(blockHash common.Hash, blockNumber uin
 	return queue, nil
 }
 
-func (sk *StakingPlugin) GetHistoryValidatorList(blockNumber uint64) (
-	staking.ValidatorExQueue, error) {
-
-	i := uint64(0)
-	if blockNumber != i {
-		i = xutil.CalculateRound(blockNumber)
-	}
-	queryNumber := i * xutil.ConsensusSize()
-	numStr := strconv.FormatUint(queryNumber, 10)
-	log.Debug("wow,GetHistoryValidatorList query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(ValidatorName + numStr))
-	if nil != err {
-		return nil, err
-	}
-	var validatorArr staking.ValidatorArraySave
-	err = rlp.DecodeBytes(data, &validatorArr)
-	if nil != err {
-		return nil, err
-	}
-	log.Debug("wow,GetHistoryValidatorList", validatorArr)
-	queue := make(staking.ValidatorExQueue, len(validatorArr.Arr))
-	var candidateHexQueue staking.CandidateHexQueue
-
-	if queryNumber == 0 {
-		data, err := STAKING_DB.HistoryDB.Get([]byte(InitNodeName + numStr))
-		if nil != err {
-			return nil, err
-		}
-
-		err = rlp.DecodeBytes(data, &candidateHexQueue)
-		if nil != err {
-			return nil, err
-		}
-		log.Debug("wow,GetHistoryValidatorList candidateHexQueue", candidateHexQueue)
-	}
-	for i, v := range validatorArr.Arr {
-
-		valEx := &staking.ValidatorEx{
-			NodeId:              v.NodeId,
-			ValidatorTerm:       v.ValidatorTerm,
-			DelegateRewardTotal: (*hexutil.Big)(v.DelegateRewardTotal),
-		}
-		if queryNumber == 0 {
-			for _, vc := range candidateHexQueue {
-				if vc.NodeId == v.NodeId {
-					valEx.BenefitAddress = vc.BenefitAddress
-					valEx.StakingAddress = vc.StakingAddress
-					valEx.Website = vc.Website
-					valEx.Description = vc.Description
-					valEx.ExternalId = vc.ExternalId
-					valEx.NodeName = vc.NodeName
-					break
-				}
-			}
-		}
-		queue[i] = valEx
-	}
-	return queue, nil
-}
-
-func (sk *StakingPlugin) GetHistoryReward(blockNumber uint64) (
-	staking.RewardReturn, error) {
-
-	i := uint64(0)
-	if blockNumber != i {
-		i = xutil.CalculateEpoch(blockNumber)
-	}
-
-	queryNumber := i * xutil.CalcBlocksEachEpoch()
-	numStr := strconv.FormatUint(queryNumber, 10)
-	log.Debug("wow,GetHistoryReward query number:", "num string", numStr)
-	data, err := STAKING_DB.HistoryDB.Get([]byte(RewardName + numStr))
-	var reward staking.Reward
-	var rewardReturn staking.RewardReturn
-	if nil != err {
-		return rewardReturn, err
-	}
-
-	err = rlp.DecodeBytes(data, &reward)
-	if nil != err {
-		return rewardReturn, err
-	}
-	log.Debug("wow,GetHistoryReward reward:", "PackageReward", reward.PackageReward, "StakingReward", reward.StakingReward)
-
-	// 查询当前结算周期出块及质押经理
-	curPackageReward := big.NewInt(0)
-	curStakingReward := big.NewInt(0)
-	if i > 0 {
-		numStr := strconv.FormatUint(queryNumber-xutil.CalcBlocksEachEpoch(), 10)
-		log.Debug("wow,GetCurHistoryReward query number:", "num string", numStr)
-		data, err := STAKING_DB.HistoryDB.Get([]byte(RewardName + numStr))
-		var curReward staking.Reward
-		if nil != err {
-			return rewardReturn, err
-		}
-
-		err = rlp.DecodeBytes(data, &curReward)
-		if nil != err {
-			return rewardReturn, err
-		}
-		log.Debug("wow,GetCurHistoryReward reward:", "PackageReward", curReward.PackageReward, "StakingReward", curReward.StakingReward)
-
-		curPackageReward = curReward.PackageReward
-		curStakingReward = curReward.StakingReward
-	}
-
-	rewardReturn = staking.RewardReturn{
-		CurPackageReward:  (*hexutil.Big)(curPackageReward),
-		CurStakingReward:  (*hexutil.Big)(curStakingReward),
-		NextPackageReward: (*hexutil.Big)(reward.PackageReward),
-		NextStakingReward: (*hexutil.Big)(reward.StakingReward),
-		PackageReward:     (*hexutil.Big)(reward.PackageReward),
-		StakingReward:     (*hexutil.Big)(reward.StakingReward),
-		YearNum:           reward.YearNum,
-		YearStartNum:      reward.YearStartNum,
-		YearEndNum:        reward.YearEndNum,
-		RemainEpoch:       reward.RemainEpoch,
-		AvgPackTime:       reward.AvgPackTime,
-	}
-	log.Debug("wow,GetHistoryReward rewardReturn:", "PackageReward", rewardReturn.PackageReward, "StakingReward", rewardReturn.StakingReward)
-	log.Debug("wow,GetHistoryReward", rewardReturn)
-
-	return rewardReturn, nil
-}
-
-func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
+// func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.CandidateVersionQueue, error) {
+func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error) {
 
 	iter := sk.db.IteratorCandidatePowerByBlockHash(blockHash, 0)
 	if err := iter.Error(); nil != err {
@@ -2141,8 +1845,8 @@ func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.Candidat
 	}
 	defer iter.Release()
 
-	queue := make(staking.CandidateVersionQueue, 0)
-
+	//queue := make(staking.CandidateVersionQueue, 0)
+	queue := make(staking.ValidatorExQueue, 0)
 	count := 0
 
 	for iter.Valid(); iter.Next(); {
@@ -2157,7 +1861,11 @@ func (sk *StakingPlugin) GetNodeVersion(blockHash common.Hash) (staking.Candidat
 			return nil, err
 		}
 
-		canVersion := buildCanVersion(can)
+		//canVersion := buildCanVersion(can)
+		canVersion := &staking.ValidatorEx{
+			NodeId:         can.NodeId,
+			ProgramVersion: can.ProgramVersion,
+		}
 		queue = append(queue, canVersion)
 	}
 	log.Debug("GetNodeVersion: loop count", "count", count)
@@ -3802,6 +3510,10 @@ func (sk *StakingPlugin) getCurrValIndex(blockHash common.Hash, blockNumber uint
 	return targetIndex, nil
 }
 
+func (sk *StakingPlugin) GetNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getNextValList(blockHash, blockNumber, isCommit)
+}
+
 func (sk *StakingPlugin) getNextValList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
 
 	targetIndex, err := sk.getNextValIndex(blockHash, blockNumber, isCommit)
@@ -3976,6 +3688,9 @@ func (sk *StakingPlugin) setRoundValListByIndex(blockNumber uint64, blockHash co
 	return nil
 }
 
+func (sk *StakingPlugin) GetVerifierArray(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
+	return sk.getVerifierList(blockHash, blockNumber, isCommit)
+}
 func (sk *StakingPlugin) getVerifierList(blockHash common.Hash, blockNumber uint64, isCommit bool) (*staking.ValidatorArray, error) {
 
 	targetIndex, err := sk.getVeriferIndex(blockHash, blockNumber, isCommit)
@@ -4357,218 +4072,4 @@ func CheckOperatingThreshold(blockNumber uint64, blockHash common.Hash, balance 
 		return false, common.Big0
 	}
 	return balance.Cmp(threshold) >= 0, threshold
-}
-
-func (sk *StakingPlugin) SetReward(block *types.Block, numStr string) error {
-	//set reward history
-	packageReward, err := LoadNewBlockReward(block.Hash(), sk.db.GetDB())
-	if nil != err {
-		log.Error("Failed to LoadNewBlockReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	stakingReward, err := LoadStakingReward(block.Hash(), sk.db.GetDB())
-	if nil != err {
-		log.Error("Failed to LoadStakingReward on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	yearNum, err := LoadChainYearNumber(block.Hash(), sk.db.GetDB())
-	if nil != err {
-		log.Error("Failed to LoadChainYearNumber on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	var reward staking.Reward
-	if numStr == "0" {
-		reward = staking.Reward{
-			PackageReward: packageReward,
-			StakingReward: stakingReward,
-			YearNum:       yearNum + 1,
-			YearStartNum:  0,
-			YearEndNum:    xutil.CalcBlocksEachYear(),
-			RemainEpoch:   uint32(xutil.EpochsPerYear()),
-			AvgPackTime:   xcom.Interval() * 1000,
-		}
-		numberStart, err := rlp.EncodeToBytes(uint64(0))
-		if nil != err {
-			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		STAKING_DB.HistoryDB.Put([]byte(YearName+"1"), numberStart)
-	} else {
-		incIssuanceTime, err := xcom.LoadIncIssuanceTime(block.Hash(), sk.db.GetDB())
-		if nil != err {
-			log.Error("Failed to LoadIncIssuanceTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		number, err := xcom.LoadIncIssuanceNumber(block.Hash(), sk.db.GetDB())
-		if nil != err {
-			log.Error("Failed to LoadIncIssuanceTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-
-		avgPackTime, err := xcom.LoadCurrentAvgPackTime()
-		if nil != err {
-			log.Error("Failed to LoadAvgPackTime on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		epochBlocks := xutil.CalcBlocksEachEpoch()
-		remainTime := incIssuanceTime - int64(block.Header().Time)
-		remainEpoch := 1
-		remainBlocks := math2.Ceil(float64(remainTime) / float64(avgPackTime))
-		if remainBlocks > float64(epochBlocks) {
-			remainEpoch = int(math2.Ceil(remainBlocks / float64(epochBlocks)))
-		}
-		//get the num of year
-		blocks := block.Number().Uint64() + uint64(remainEpoch)*epochBlocks
-		if number != 0 && block.Number().Uint64()%number == 0 {
-			yearTemp := strconv.FormatUint(uint64(yearNum+1), 10)
-			numberStart, err := rlp.EncodeToBytes(number)
-			if nil != err {
-				log.Error("mygod,Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-				return err
-			}
-			STAKING_DB.HistoryDB.Put([]byte(YearName+yearTemp), numberStart)
-			log.Debug("set yearNum", "yearTemp", yearTemp, "number", block.Number())
-		}
-		if number == blocks {
-			yearTemp := strconv.FormatUint(uint64(yearNum+1), 10)
-			data, err := STAKING_DB.HistoryDB.Get([]byte(YearName + yearTemp))
-			if nil != err {
-				log.Error("mygod,get YearName error", "key", YearName+yearTemp, "err", err)
-			}
-			err = rlp.DecodeBytes(data, &number)
-			if nil != err {
-				log.Error("mygod,DecodeBytes YearName error", "key", YearName+yearTemp, "err", err)
-			}
-		}
-		log.Debug("LoadNewBlockReward and LoadStakingReward", "packageReward", packageReward, "stakingReward", stakingReward, "hash", block.Hash(), "block number", block.Number(),
-			"blocks", blocks, "number", number)
-		reward = staking.Reward{
-			PackageReward: packageReward,
-			StakingReward: stakingReward,
-			YearNum:       yearNum + 1,
-			YearStartNum:  number,
-			YearEndNum:    blocks,
-			RemainEpoch:   uint32(remainEpoch),
-			AvgPackTime:   avgPackTime,
-		}
-	}
-	log.Debug("staking.Reward ,LoadNewBlockReward and LoadStakingReward", "packageReward", reward.PackageReward, "stakingReward", reward.StakingReward, "hash", block.Hash(), "number", block.Number())
-	dataReward, err := rlp.EncodeToBytes(reward)
-	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	STAKING_DB.HistoryDB.Put([]byte(RewardName+numStr), dataReward)
-	log.Debug("wow,insert rewardName history :", dataReward)
-	return nil
-}
-
-func (sk *StakingPlugin) SetValidator(block *types.Block, numStr string, nodeId discover.NodeID) (bool, map[discover.NodeID]struct{}, error) {
-	var isCurr bool
-	currMap := make(map[discover.NodeID]struct{})
-	current, err := sk.getCurrValList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
-	if nil != err {
-		log.Error("Failed to Query Current Round validators on stakingPlugin Confirmed When Election block",
-			"blockNumber", block.Number().Uint64(), "blockHash", block.Hash().TerminalString(), "err", err)
-		return isCurr, currMap, err
-	}
-	currentValidatorArray := &staking.ValidatorArraySave{
-		Start: current.Start,
-		End:   current.End,
-	}
-	vQSave := make(staking.ValidatorQueueSave, len(current.Arr))
-	for k, v := range current.Arr {
-		currMap[v.NodeId] = struct{}{}
-		if nodeId == v.NodeId {
-			isCurr = true
-		}
-		vQSave[k] = &staking.ValidatorSave{
-			ValidatorTerm: v.ValidatorTerm,
-			NodeId:        v.NodeId,
-		}
-	}
-	currentValidatorArray.Arr = vQSave
-	data, err := rlp.EncodeToBytes(currentValidatorArray)
-	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Election block", "err", err)
-		return isCurr, currMap, err
-	}
-
-	STAKING_DB.HistoryDB.Put([]byte(ValidatorName+numStr), data)
-	log.Debug("wow,insert validator history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", ValidatorName+numStr)
-	log.Debug("wow,insert validator history", "currentValidatorArray", currentValidatorArray)
-	return isCurr, currMap, nil
-}
-
-func (sk *StakingPlugin) SetVerifier(block *types.Block, numStr string) error {
-	current, err := sk.getVerifierList(block.Hash(), block.NumberU64(), QueryStartNotIrr)
-	if nil != err {
-		log.Error("Failed to Query Current Round verifiers on stakingPlugin Confirmed When Settletmetn block",
-			"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", err)
-		return err
-	}
-
-	currentCandidate, error := sk.GetCandidateList(block.Hash(), block.NumberU64())
-	if nil != error {
-		log.Error("Failed to Query Current Round candidate on stakingPlugin Confirmed When Settletmetn block",
-			"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", error)
-		return error
-	}
-	currentValidatorArray := &staking.ValidatorArraySave{
-		Start: current.Start,
-		End:   current.End,
-	}
-	vQSave := make(staking.ValidatorQueueSave, len(current.Arr))
-	for k, v := range current.Arr {
-		vQSave[k] = &staking.ValidatorSave{
-			ValidatorTerm:   v.ValidatorTerm,
-			NodeId:          v.NodeId,
-			StakingBlockNum: v.StakingBlockNum,
-		}
-		var isCurrent = false
-		for _, cv := range currentCandidate {
-			if cv.NodeId == v.NodeId {
-				vQSave[k].DelegateRewardTotal = cv.DelegateRewardTotal.ToInt()
-				vQSave[k].DelegateTotal = cv.DelegateTotal.ToInt()
-				isCurrent = true
-				break
-			}
-		}
-		if !isCurrent {
-			nodeIdAddr, err := xutil.NodeId2Addr(v.NodeId)
-			if nil != err {
-				log.Error("Failed to NodeId2Addr: parse current nodeId is failed", "err", err)
-			}
-			can, err := sk.GetCandidateInfo(block.Hash(), nodeIdAddr)
-			if err != nil || can == nil {
-				log.Error("Failed to Query Current Round candidate info on stakingPlugin Confirmed When Settletmetn block",
-					"blockHash", block.Hash().Hex(), "blockNumber", block.Number().Uint64(), "err", err)
-				log.Debug("Failed get can :", can)
-			} else {
-				vQSave[k].DelegateRewardTotal = can.DelegateRewardTotal
-				vQSave[k].DelegateTotal = can.DelegateTotal
-			}
-		}
-
-	}
-	currentValidatorArray.Arr = vQSave
-	data, err := rlp.EncodeToBytes(currentValidatorArray)
-	if nil != err {
-		log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-		return err
-	}
-	STAKING_DB.HistoryDB.Put([]byte(VerifierName+numStr), data)
-	log.Debug("wow,insert verifier history", "blockNumber", block.Number(), "blockHash", block.Hash().String(), "insertNum", VerifierName+numStr)
-	log.Debug("wow,insert verifier history :", currentValidatorArray)
-
-	if numStr == "0" {
-		dataCandidate, err := rlp.EncodeToBytes(currentCandidate)
-		if nil != err {
-			log.Error("Failed to EncodeToBytes on stakingPlugin Confirmed When Settletmetn block", "err", err)
-			return err
-		}
-		STAKING_DB.HistoryDB.Put([]byte(InitNodeName+"0"), dataCandidate)
-		log.Debug("wow,insert candidate  0:", currentCandidate)
-	}
-	return nil
 }

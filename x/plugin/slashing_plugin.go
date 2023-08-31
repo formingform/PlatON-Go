@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the PlatON-Go library. If not, see <http://www.gnu.org/licenses/>.
 
-
 package plugin
 
 import (
@@ -23,10 +22,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"github.com/PlatONnetwork/PlatON-Go/params"
 	"github.com/PlatONnetwork/PlatON-Go/rlp"
 	"math/big"
-	"strconv"
 	"sync"
 
 	"github.com/PlatONnetwork/PlatON-Go/x/gov"
@@ -215,19 +214,21 @@ func (sp *SlashingPlugin) BeginBlock(blockHash common.Hash, header *types.Header
 			// it means that there is no block,
 			// then the penalty is directly
 			if len(slashQueue) != 0 {
-				var slashNodeQueue staking.SlashNodeQueue
-				for _, slashItem := range slashQueue  {
+				/*var slashNodeQueue staking.SlashNodeQueue
+				for _, slashItem := range slashQueue {
 					snData := &staking.SlashNodeData{
-						NodeId          : slashItem.NodeId,
-						Amount : slashItem.Amount,
+						NodeId: slashItem.NodeId,
+						Amount: slashItem.Amount,
 					}
 					slashNodeQueue = append(slashNodeQueue, snData)
 				}
-				sp.setSlashData(header.Number.Uint64() ,slashNodeQueue)
+				sp.setSlashData(header.Number.Uint64(), slashNodeQueue)*/
 				if err := stk.SlashCandidates(state, blockHash, header.Number.Uint64(), slashQueue...); nil != err {
 					log.Error("Failed to BeginBlock, call SlashCandidates is failed", "blockNumber", header.Number.Uint64(), "blockHash", blockHash.TerminalString(), "err", err)
 					return err
 				}
+				//stats: 收集被除法节点信息
+				monitor.MonitorInstance().CollectSlashInfo(header.Number.Uint64(), slashQueue)
 			}
 
 		}
@@ -794,18 +795,4 @@ func calcSlashBlockRewards(db snapshotdb.DB, hash common.Hash, blockRewardAmount
 		return nil, err
 	}
 	return new(big.Int).Mul(newBlockReward, new(big.Int).SetUint64(blockRewardAmount)), nil
-}
-
-func (sp *SlashingPlugin)setSlashData(num uint64,snQueue staking.SlashNodeQueue) {
-	log.Debug("setSlashData","num", num,"len(snQueue)",len(snQueue))
-	if snQueue == nil || len(snQueue) == 0{
-		return
-	}
-	log.Debug("setSlashData,su", snQueue)
-	data, err := rlp.EncodeToBytes(snQueue)
-	if nil != err {
-		log.Error("wow,Failed to EncodeToBytes on slashingPlugin Confirmed When Election block", "err", err)
-	}
-	numStr := strconv.FormatUint(num, 10)
-	STAKING_DB.HistoryDB.Put([]byte(SlashName+numStr), data)
 }

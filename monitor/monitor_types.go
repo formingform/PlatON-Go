@@ -35,7 +35,51 @@ type ImplicitPPOSTx struct {
 	InputHex   string `json:"inputHex"`
 	LogDataHex string `json:"logDataHex"`
 	//ErrCode  uint16         `json:"errCode"` //内置合约执成功时为0，其它为业务错误代码
+}
 
+type EpochView struct {
+	NextPackageReward *big.Int `json:"nextPackageReward"`
+	NextStakingReward *big.Int `json:"nextStakingReward"`
+	PackageReward     *big.Int `json:"packageReward"`
+	StakingReward     *big.Int `json:"stakingReward"`
+	ChainAge          uint32   `json:"chainAge"` //starts from 1
+	YearStartBlockNum uint64   `json:"yearStartBlockNum"`
+	YearEndBlockNum   uint64   `json:"yearEndBlockNum"`
+	RemainEpoch       uint32   `json:"remainEpoch"`
+	AvgPackTime       uint64   `json:"avgPackTime"`
+}
+
+type AccountView struct {
+	// 用户账户
+	Account common.Address `json:"account"`
+	// 账户余额
+	FreeBalance *big.Int `json:"freeBalance"`
+	// 锁仓锁定的余额
+	RestrictingPlanLockedAmount *big.Int `json:"restrictingPlanLockedAmount,omitempty"`
+	// 锁仓欠释放的余额
+	RestrictingPlanPledgeAmount *big.Int `json:"restrictingPlanPledgeAmount,omitempty"`
+	// 锁定结束的委托金，资金来源是用户账户余额
+	DelegationUnLockedFreeBalance *big.Int `json:"delegationUnLockedFreeBalance,omitempty"`
+	// 锁定结束的委托金，资金来源是锁仓计划。用户来领取委托金时，一部分可以直接释放到用户账户；一部分可能重新回到锁仓计划中
+	DelegationUnLockedRestrictingPlanAmount *big.Int `json:"delegationUnLockedRestrictingPlanAmount,omitempty"`
+	// 委托冻结冻结中明细
+	DelegationLockedItems []DelegationLockedItem `json:"delegationLockedItems,omitempty"`
+}
+
+type DelegationLockedItem struct {
+	// 锁定截止周期
+	ExpiredEpoch uint32 `json:"expiredEpoch,omitempty"`
+	// 处于锁定期的委托金，资金来源是用户账户余额
+	FreeBalance *big.Int `json:"FreeBalance,omitempty"`
+	//处于锁定期的委托金，资金来源是锁仓计划
+	RestrictingPlanAmount *big.Int `json:"restrictingPlanAmount,omitempty"`
+}
+
+type ProposalParticipants struct {
+	AccuVerifierAccount uint64 `json:"accuVerifierAccount,omitempty"` //累计验证人数量（去重后）
+	Yeas                uint64 `json:"yeas,omitempty"`                //赞成数
+	Nays                uint64 `json:"nays,omitempty"`                //反对数
+	Abstentions         uint64 `json:"abstentions,omitempty"`         //弃权数
 }
 
 type Intf_stakingPlugin interface {
@@ -43,7 +87,7 @@ type Intf_stakingPlugin interface {
 	GetCurrValList(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetVerifierArray(common.Hash, uint64, bool) (*staking.ValidatorArray, error)
 	GetCandidateList(common.Hash, uint64) (staking.CandidateHexQueue, error)
-	GetCandidateInfo(common.Hash, *big.Int) (*staking.Candidate, error)
+	GetCandidateInfo(common.Hash, common.NodeAddress) (*staking.Candidate, error)
 	GetNodeVersion(blockHash common.Hash) (staking.ValidatorExQueue, error)
 	GetGetDelegationLockCompactInfo(blockHash common.Hash, blockNumber uint64, delAddr common.Address) (*staking.DelegationLockHex, error)
 }

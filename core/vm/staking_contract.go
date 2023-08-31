@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -48,29 +47,30 @@ import (
 )
 
 const (
-	TxCreateStaking           = 1000
-	TxEditorCandidate         = 1001
-	TxIncreaseStaking         = 1002
-	TxWithdrewCandidate       = 1003
-	TxDelegate                = 1004
-	TxWithdrewDelegation      = 1005
-	TxRedeemDelegation        = 1006
-	QueryVerifierList         = 1100
-	QueryValidatorList        = 1101
-	QueryCandidateList        = 1102
-	QueryRelateList           = 1103
-	QueryDelegateInfo         = 1104
-	QueryCandidateInfo        = 1105
-	QueryDelegationLock       = 1106
-	GetPackageReward          = 1200
-	GetStakingReward          = 1201
-	GetAvgPackTime            = 1202
-	QueryHistoryVerifierList  = 1300
-	QueryHistoryValidatorList = 1301
-	QueryNodeVersion          = 1302
-	QueryHistoryReward        = 1303
-	QueryHistorySlash         = 1304
-	QueryHistoryTrans         = 1305
+	TxCreateStaking      = 1000
+	TxEditorCandidate    = 1001
+	TxIncreaseStaking    = 1002
+	TxWithdrewCandidate  = 1003
+	TxDelegate           = 1004
+	TxWithdrewDelegation = 1005
+	TxRedeemDelegation   = 1006
+	QueryVerifierList    = 1100
+	QueryValidatorList   = 1101
+	QueryCandidateList   = 1102
+	QueryRelateList      = 1103
+	QueryDelegateInfo    = 1104
+	QueryCandidateInfo   = 1105
+	QueryDelegationLock  = 1106
+	GetPackageReward     = 1200
+	GetStakingReward     = 1201
+	GetAvgPackTime       = 1202
+
+	/*	QueryHistoryVerifierList  = 1300
+		QueryHistoryValidatorList = 1301
+		QueryNodeVersion          = 1302
+		QueryHistoryReward        = 1303
+		QueryHistorySlash         = 1304
+		QueryHistoryTrans         = 1305*/
 )
 
 const (
@@ -116,18 +116,18 @@ func (stkc *StakingContract) FnSignsV1() map[uint16]interface{} {
 		TxWithdrewDelegation: stkc.withdrewDelegation,
 
 		// Get
-		QueryVerifierList:         stkc.getVerifierList,
-		QueryValidatorList:        stkc.getValidatorList,
-		QueryCandidateList:        stkc.getCandidateList,
-		QueryRelateList:           stkc.getRelatedListByDelAddr,
-		QueryDelegateInfo:         stkc.getDelegateInfo,
-		QueryCandidateInfo:        stkc.getCandidateInfo,
-		QueryHistoryVerifierList:  stkc.getHistoryVerifierList,
-		QueryHistoryValidatorList: stkc.getHistoryValidatorList,
-		QueryNodeVersion:          stkc.getNodeVersion,
-		QueryHistoryReward:        stkc.getHistoryReward,
-		QueryHistorySlash:         stkc.getHistorySlash,
-		QueryHistoryTrans:         stkc.QueryHistoryTrans,
+		QueryVerifierList:  stkc.getVerifierList,
+		QueryValidatorList: stkc.getValidatorList,
+		QueryCandidateList: stkc.getCandidateList,
+		QueryRelateList:    stkc.getRelatedListByDelAddr,
+		QueryDelegateInfo:  stkc.getDelegateInfo,
+		QueryCandidateInfo: stkc.getCandidateInfo,
+		/*		QueryHistoryVerifierList:  stkc.getHistoryVerifierList,
+				QueryHistoryValidatorList: stkc.getHistoryValidatorList,
+				QueryNodeVersion:          stkc.getNodeVersion,
+				QueryHistoryReward:        stkc.getHistoryReward,
+				QueryHistorySlash:         stkc.getHistorySlash,
+				QueryHistoryTrans:         stkc.QueryHistoryTrans,*/
 
 		GetPackageReward: stkc.getPackageReward,
 		GetStakingReward: stkc.getStakingReward,
@@ -909,29 +909,6 @@ func (stkc *StakingContract) getVerifierList() ([]byte, error) {
 		arr, nil), nil
 }
 
-func (stkc *StakingContract) getHistoryVerifierList(blockNumber *big.Int) ([]byte, error) {
-
-	//blockHash := stkc.Evm.Context.BlockHash
-
-	arr, err := stkc.Plugin.GetHistoryVerifierList(blockNumber.Uint64())
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		callResultHandler(stkc.Evm, "getHistoryVerifierList",
-			arr, staking.ErrGetVerifierList.Wrap(err.Error()))
-	}
-
-	if (err != nil && strings.Contains(err.Error(), "not found")) || arr.IsEmpty() {
-		return callResultHandler(stkc.Evm, "getHistoryVerifierList",
-			arr, staking.ErrGetVerifierList.Wrap("VerifierList info is not found")), nil
-	}
-
-	arrByte, _ := json.Marshal(arr)
-
-	// todo test
-	log.Debug("getHistoryVerifierList", "valArr", string(arrByte))
-	return callResultHandler(stkc.Evm, "getHistoryVerifierList",
-		arr, nil), nil
-}
-
 func (stkc *StakingContract) getValidatorList() ([]byte, error) {
 
 	blockNumber := stkc.Evm.Context.BlockNumber
@@ -951,63 +928,6 @@ func (stkc *StakingContract) getValidatorList() ([]byte, error) {
 
 	return callResultHandler(stkc.Evm, "getValidatorList",
 		arr, nil), nil
-}
-
-func (stkc *StakingContract) getHistoryValidatorList(blockNumber *big.Int) ([]byte, error) {
-	//blockHash := stkc.Evm.Context.BlockHash
-
-	arr, err := stkc.Plugin.GetHistoryValidatorList(blockNumber.Uint64())
-	if nil != err && !strings.Contains(err.Error(), "not found") {
-		return callResultHandler(stkc.Evm, "getHistoryValidatorList",
-			arr, staking.ErrGetValidatorList.Wrap(err.Error())), nil
-	}
-
-	if (nil != err && strings.Contains(err.Error(), "not found")) || arr.IsEmpty() {
-		return callResultHandler(stkc.Evm, "getHistoryValidatorList",
-			arr, staking.ErrGetValidatorList.Wrap("ValidatorList info is not found")), nil
-	}
-
-	return callResultHandler(stkc.Evm, "getHistoryValidatorList",
-		arr, nil), nil
-}
-
-func (stkc *StakingContract) getHistoryReward(blockNumber *big.Int) ([]byte, error) {
-	//blockHash := stkc.Evm.Context.BlockHash
-	reward, err := stkc.Plugin.GetHistoryReward(blockNumber.Uint64())
-
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return callResultHandler(stkc.Evm, "getHistoryReward",
-			reward, staking.ErrGetValidatorList.Wrap(err.Error())), nil
-	}
-
-	return callResultHandler(stkc.Evm, "getHistoryReward",
-		reward, nil), nil
-}
-
-func (stkc *StakingContract) getHistorySlash(blockNumber *big.Int) ([]byte, error) {
-	//blockHash := stkc.Evm.Context.BlockHash
-
-	slashData, err := stkc.Plugin.GetSlashData(blockNumber.Uint64())
-	if nil != err && !strings.Contains(err.Error(), "not found") {
-		return callResultHandler(stkc.Evm, "getHistorySlash",
-			slashData, staking.ErrGetValidatorList.Wrap(err.Error())), nil
-	}
-
-	return callResultHandler(stkc.Evm, "getHistorySlash",
-		slashData, nil), nil
-}
-
-func (stkc *StakingContract) QueryHistoryTrans(blockNumber *big.Int) ([]byte, error) {
-	//blockHash := stkc.Evm.Context.BlockHash
-
-	transData, err := stkc.Plugin.GetTransData(blockNumber.Uint64())
-	if nil != err && !strings.Contains(err.Error(), "not found") {
-		return callResultHandler(stkc.Evm, "QueryHistoryTrans",
-			transData, staking.ErrGetValidatorList.Wrap(err.Error())), nil
-	}
-
-	return callResultHandler(stkc.Evm, "QueryHistoryTrans",
-		transData, nil), nil
 }
 
 func (stkc *StakingContract) getNodeVersion() ([]byte, error) {
