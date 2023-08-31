@@ -662,3 +662,4 @@ web3._extend({
 	properties: [
 	]
 });
+`
