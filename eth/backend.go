@@ -117,13 +117,6 @@ func New(stack *node.Node, config *Config) (*Ethereum, error) {
 	}
 	snapshotdb.SetDBOptions(config.DatabaseCache, config.DatabaseHandles)
 
-	hDB, error := stack.OpenDatabase("historydata", config.DatabaseCache, config.DatabaseHandles, "eth/db/historydata/")
-	if error != nil {
-		return nil, error
-	}
-	xplugin.STAKING_DB = &xplugin.StakingDB{
-		HistoryDB: hDB,
-	}
 	snapshotBaseDB, err := snapshotdb.Open(stack.ResolvePath(snapshotdb.DBPath), config.DatabaseCache, config.DatabaseHandles, true)
 	if err != nil {
 		return nil, err
