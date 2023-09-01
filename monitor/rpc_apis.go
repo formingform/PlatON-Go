@@ -46,7 +46,13 @@ func NewMonitorAPIs(b Backend) []rpc.API {
 }
 
 // GetReceiptExtsByBlockNumber returns the transaction receipt extend info for the given block number.
-func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[string]interface{}, error) {
+func (api *MonitorAPI) GetReceiptExtsByBlockNumber(number rpc.BlockNumber) ([]map[string]interface{}, error) {
+	blockNumber := uint64(number)
+	if number == rpc.LatestBlockNumber {
+		blockNumber = api.b.CurrentBlock().NumberU64()
+	}
+	log.Debug("GetReceiptExtsByBlockNumber", "number", number.Int64(), "blockNumber", blockNumber)
+
 	blockNr := rpc.BlockNumber(blockNumber)
 	block, err := api.b.BlockByNumber(context.Background(), blockNr)
 	if block == nil {
@@ -161,15 +167,22 @@ func (api *MonitorAPI) GetReceiptExtsByBlockNumber(blockNumber uint64) ([]map[st
 }
 
 // GetVerifiersByBlockNumber 获取结算周期最后一个块高=blockNumber的验证人（201名单）列表
-func (api *MonitorAPI) GetVerifiersByBlockNumber(lastBlockNumberOfPrevSettlePeriod uint64) (*staking.ValidatorExQueue, error) {
+// 输入参数是上一个结算周期最后一个块高
+func (api *MonitorAPI) GetVerifiersByBlockNumber(number rpc.BlockNumber) (*staking.ValidatorExQueue, error) {
+	blockNumber := uint64(number)
+	if number == rpc.LatestBlockNumber {
+		blockNumber = api.b.CurrentBlock().NumberU64()
+	}
+	log.Debug("GetVerifiersByBlockNumber", "number", number.Int64(), "blockNumber", blockNumber)
+
 	// epoch starts from 1
-	epoch := xutil.CalculateEpoch(lastBlockNumberOfPrevSettlePeriod)
+	epoch := xutil.CalculateEpoch(blockNumber)
 	dbKey := VerifiersOfEpochKey.String() + strconv.FormatUint(epoch, 10)
-	log.Debug("GetVerifiersByBlockNumber", "blockNumber", lastBlockNumberOfPrevSettlePeriod, "dbKey", dbKey)
+	log.Debug("GetVerifiersByBlockNumber", "blockNumber", blockNumber, "dbKey", dbKey)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
-		log.Error("fail to GetVerifiersByBlockNumber", "blockNumber", lastBlockNumberOfPrevSettlePeriod, "err", err)
+		log.Error("fail to GetVerifiersByBlockNumber", "blockNumber", blockNumber, "err", err)
 		if err == ErrNotFound {
 			return nil, nil
 		}
@@ -179,7 +192,7 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(lastBlockNumberOfPrevSettlePeri
 	if len(data) == 0 { //len(nil)==0
 		return nil, err
 	}
-	log.Debug("GetVerifiersByBlockNumber result", "blockNumber", lastBlockNumberOfPrevSettlePeriod, "data:", string(data))
+	log.Debug("GetVerifiersByBlockNumber result", "blockNumber", blockNumber, "data:", string(data))
 
 	var validatorExQueue staking.ValidatorExQueue
 	common.ParseJson(data, &validatorExQueue)
@@ -189,19 +202,26 @@ func (api *MonitorAPI) GetVerifiersByBlockNumber(lastBlockNumberOfPrevSettlePeri
 }
 
 // GetValidatorsByBlockNumber 获取共识周期最后一个块高=blockNumber的验证人（25名单）列表
-func (api *MonitorAPI) GetValidatorsByBlockNumber(lastBlockNumberOfPrevConsensusPeriod uint64) (*staking.ValidatorExQueue, error) {
+// 输入参数上一个共识轮的最后一个块高
+func (api *MonitorAPI) GetValidatorsByBlockNumber(number rpc.BlockNumber) (*staking.ValidatorExQueue, error) {
+	blockNumber := uint64(number)
+	if number == rpc.LatestBlockNumber {
+		blockNumber = api.b.CurrentBlock().NumberU64()
+	}
+	log.Debug("GetValidatorsByBlockNumber", "number", number.Int64(), "blockNumber", blockNumber)
+
 	// epoch starts from 1
 	round := uint64(0)
-	if lastBlockNumberOfPrevConsensusPeriod != round {
-		round = xutil.CalculateRound(lastBlockNumberOfPrevConsensusPeriod)
+	if blockNumber != round {
+		round = xutil.CalculateRound(blockNumber)
 	}
 	queryNumber := round * xutil.ConsensusSize()
 	dbKey := ValidatorsOfEpochKey.String() + strconv.FormatUint(queryNumber, 10)
-	log.Debug("GetValidatorsByBlockNumber", "blockNumber", lastBlockNumberOfPrevConsensusPeriod, "dbKey", dbKey)
+	log.Debug("GetValidatorsByBlockNumber", "blockNumber", blockNumber, "dbKey", dbKey)
 
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
-		log.Error("fail to GetValidatorsByBlockNumber", "blockNumber", lastBlockNumberOfPrevConsensusPeriod, "err", err)
+		log.Error("fail to GetValidatorsByBlockNumber", "blockNumber", blockNumber, "err", err)
 		if err == ErrNotFound {
 			return nil, nil
 		}
@@ -211,15 +231,20 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(lastBlockNumberOfPrevConsensus
 		return nil, nil
 	}
 
-	log.Debug("GetValidatorsByBlockNumber result", "blockNumber", lastBlockNumberOfPrevConsensusPeriod, "data:", string(data))
+	log.Debug("GetValidatorsByBlockNumber result", "blockNumber", blockNumber, "data:", string(data))
 	var validators staking.ValidatorExQueue
 	common.ParseJson(data, &validators)
 	return &validators, nil
 }
 
 // 输入参数是上个结算周期的最后一个块高
-func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView, error) {
-	log.Debug("GetEpochInfoByBlockNumber", "blockNumber", blockNumber)
+func (api *MonitorAPI) GetEpochInfoByBlockNumber(number rpc.BlockNumber) (*EpochView, error) {
+	blockNumber := uint64(number)
+	if number == rpc.LatestBlockNumber {
+		blockNumber = api.b.CurrentBlock().NumberU64()
+	}
+	log.Debug("GetEpochInfoByBlockNumber", "number", number.Int64(), "blockNumber", blockNumber)
+
 	var epoch = uint64(1)
 	if blockNumber > 0 {
 		epoch = xutil.CalculateEpoch(blockNumber)
@@ -271,10 +296,15 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(blockNumber uint64) (*EpochView
 	return &view, nil
 }
 
-// GetSlashInfoByBlockNumber 选举块高时，查询节点被处罚的信息
-func (api *MonitorAPI) GetSlashInfoByBlockNumber(electionBlockNumber uint64) (*staking.SlashQueue, error) {
-	log.Debug("GetSlashInfoByBlockNumber", "blockNumber", electionBlockNumber)
-	dbKey := SlashKey.String() + "_" + strconv.FormatUint(electionBlockNumber, 10)
+// GetSlashInfoByBlockNumber 选举块高时，查询节点被处罚的信息。输入参数是选举块高
+func (api *MonitorAPI) GetSlashInfoByBlockNumber(number rpc.BlockNumber) (*staking.SlashQueue, error) {
+	blockNumber := uint64(number)
+	if number == rpc.LatestBlockNumber {
+		blockNumber = api.b.CurrentBlock().NumberU64()
+	}
+	log.Debug("GetSlashInfoByBlockNumber", "number", number.Int64(), "blockNumber", blockNumber)
+
+	dbKey := SlashKey.String() + "_" + strconv.FormatUint(blockNumber, 10)
 	data, err := MonitorInstance().monitordb.Get([]byte(dbKey))
 	if nil != err {
 		if err == ErrNotFound {
@@ -297,6 +327,8 @@ func (api *MonitorAPI) GetNodeVersion() (staking.ValidatorExQueue, error) {
 }
 
 // GetAccountView 链上获取帐号的当前信息，包括：余额，锁仓，委托等
+// monitor.getAccountView(["lat14ccm5gxvz7f43dpr809ylwnurj4cn4v24kklyg","lat17warrr67cwplfqpn6aqe9rw406lts54z4zwdzp"],"latest")
+// monitor.getAccountView(["lat14ccm5gxvz7f43dpr809ylwnurj4cn4v24kklyg","lat17warrr67cwplfqpn6aqe9rw406lts54z4zwdzp"],4312)
 func (api *MonitorAPI) GetAccountView(accounts []common.Address, number rpc.BlockNumber) []*AccountView {
 	log.Debug("GetAccountView", "accounts", common.ToJson(accounts), "number", number.Int64())
 

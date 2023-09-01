@@ -638,7 +638,7 @@ web3._extend({
 		}),
 		new web3._extend.Method({
 			name: 'getNodeVersion',
-			call: 'admin_getNodeVersion'
+			call: 'monitor_getNodeVersion'
 		}),
 		new web3._extend.Method({
 			name: 'getAccountView',
@@ -652,12 +652,6 @@ web3._extend({
 			params: 2,
 			inputFormatter: [null,null]
 		}),
-		new web3._extend.Method({
-			name: 'getImplicitPPOSTxsByBlockNumber',
-			call: 'monitor_getImplicitPPOSTxsByBlockNumber',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
-		}),		
 	],
 	properties: [
 	]
