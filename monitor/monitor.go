@@ -111,7 +111,7 @@ func (m *Monitor) Monitordb() *monitorDB {
 }*/
 
 func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
-	log.Debug("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
+	log.Info("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 
 	dbKey := EmbedTransferKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -160,7 +160,7 @@ func (m *Monitor) GetEmbedTransfer(blockNumber uint64, txHash common.Hash) []*Em
 }
 
 func (m *Monitor) CollectCreatedContractInfo(txHash common.Hash, contractInfo *ContractInfo) {
-	log.Debug("CollectCreatedContractInfo", "txHash", txHash.String(), "contractInfo", string(common.ToJson(contractInfo)))
+	log.Info("CollectCreatedContractInfo", "txHash", txHash.String(), "contractInfo", string(common.ToJson(contractInfo)))
 
 	dbKey := CreatedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -201,7 +201,7 @@ func (m *Monitor) GetCreatedContractInfoList(blockNumber uint64, txHash common.H
 }
 
 func (m *Monitor) CollectSuicidedContractInfo(txHash common.Hash, suicidedContractAddr common.Address) {
-	log.Debug("CollectSuicidedContractInfo", "txHash", txHash.String(), "suicidedContractAddr", suicidedContractAddr.String())
+	log.Info("CollectSuicidedContractInfo", "txHash", txHash.String(), "suicidedContractAddr", suicidedContractAddr.String())
 
 	dbKey := SuicidedContractKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
@@ -257,7 +257,7 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 		m.monitordb.Put([]byte(flagDbKey), []byte{0x01})
 	}
 
-	log.Debug("CollectProxyPattern save proxy relation flag success", "txHash", txHash.String(), "proxy", proxyContractInfo.Address.String(), "implementation", implementationContractInfo.Address.String())
+	log.Info("CollectProxyPattern", "txHash", txHash.String(), "proxy", proxyContractInfo.Address.String(), "implementation", implementationContractInfo.Address.String())
 
 	// 收集当前当前交易发现的代理关系
 	dbKey := ProxyPatternKey.String() + "_" + txHash.String()
@@ -322,7 +322,7 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input []byte, ret []byte, itsLog *types.Log) {
 	errCode := binary.BigEndian.Uint16(ret)
 	inputHex := hexutil.Encode(input)
-	log.Debug("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.String(), "to", to.String(), "input", inputHex, "errCode", errCode)
+	log.Info("CollectImplicitPPOSTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.String(), "to", to.String(), "input", inputHex, "errCode", errCode)
 	dbKey := ImplicitPPOSTxKey.String() + "_" + txHash.String()
 	data, err := m.monitordb.Get([]byte(dbKey))
 	if nil != err && err != ErrNotFound {
@@ -368,6 +368,8 @@ func (m *Monitor) GetImplicitPPOSTx(blockNumber uint64, txHash common.Hash) []*I
 }
 
 func (m *Monitor) CollectSlashInfo(electionBlockNumber uint64, slashQueue staking.SlashQueue) {
+	log.Info("CollectSlashInfo", "blockNumber", electionBlockNumber, "slashQueue", string(common.ToJson(slashQueue)))
+
 	if slashQueue == nil || len(slashQueue) == 0 {
 		return
 	}
@@ -390,7 +392,7 @@ func (m *Monitor) CollectInitVerifiers(blockHash common.Hash, blockNumber uint64
 		return
 	}
 
-	log.Info("CollectInitVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
+	log.Info("CollectInitVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr), "verifiers", string(common.ToJson(verifiers)))
 	for idx, item := range verifiers.Arr {
 		log.Info("CollectInitVerifiers:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}
@@ -417,7 +419,8 @@ func (m *Monitor) CollectInitValidators(blockHash common.Hash, blockNumber uint6
 		return
 	}
 
-	log.Info("CollectInitValidators:", "blockNumber", blockNumber, "size", len(curValidators.Arr))
+	log.Info("CollectInitValidators:", "blockNumber", blockNumber, "size", len(curValidators.Arr), "validators", string(common.ToJson(curValidators)))
+
 	for idx, item := range curValidators.Arr {
 		log.Info("CollectInitValidators:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}
@@ -447,7 +450,7 @@ func (m *Monitor) CollectNextEpochVerifiers(blockHash common.Hash, blockNumber u
 			"blockHash", blockHash.Hex(), "blockNumber", blockNumber, "err", err)
 		return
 	}
-	log.Debug("CollectNextEpochVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr))
+	log.Info("CollectNextEpochVerifiers:", "blockNumber", blockNumber, "size", len(verifiers.Arr), "verifiers", string(common.ToJson(verifiers)))
 	for idx, item := range verifiers.Arr {
 		log.Info("CollectNextEpochVerifiers:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}
@@ -478,7 +481,7 @@ func (m *Monitor) CollectNextEpochValidators(blockHash common.Hash, blockNumber 
 		log.Error("Failed to CollectNextEpochValidators", "blockNumber", blockNumber, "blockHash", blockHash.Hex(), "err", err)
 		return
 	}
-	log.Info("CollectNextEpochValidators:", "blockNumber", blockNumber, "size", len(nextValidators.Arr))
+	log.Info("CollectNextEpochValidators:", "blockNumber", blockNumber, "size", len(nextValidators.Arr), "validators", string(common.ToJson(nextValidators)))
 	for idx, item := range nextValidators.Arr {
 		log.Info("CollectNextEpochValidators:", "idx", idx, "nodeId", item.NodeId, "stakingBlockNum", item.StakingBlockNum)
 	}
