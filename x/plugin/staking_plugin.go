@@ -2068,6 +2068,7 @@ func (sk *StakingPlugin) GetHistoryValidatorList(blockNumber uint64) (
 	return queue, nil
 }
 
+// scan-agent同步到一个epoch开始块高时，会计算上一个epoch结束块高，并作为参数调用此方法
 func (sk *StakingPlugin) GetHistoryReward(blockNumber uint64) (
 	staking.RewardReturn, error) {
 
@@ -2075,7 +2076,7 @@ func (sk *StakingPlugin) GetHistoryReward(blockNumber uint64) (
 	if blockNumber != i {
 		i = xutil.CalculateEpoch(blockNumber)
 	}
-
+	//重新计算了一次输入参数所在epoch的结束块高。应该时和输入参数一致的。区块0时还是0
 	queryNumber := i * xutil.CalcBlocksEachEpoch()
 	numStr := strconv.FormatUint(queryNumber, 10)
 	log.Debug("wow,GetHistoryReward query number:", "num string", numStr)
@@ -4359,6 +4360,11 @@ func CheckOperatingThreshold(blockNumber uint64, blockHash common.Hash, balance 
 	return balance.Cmp(threshold) >= 0, threshold
 }
 
+/*
+*
+保存时，是把当前结算周期要用的数据staking.Reward，保存到前一个结算周期的最后一块高上。
+获取时，scan-agent输入的参数，也是上一个epoch结束块高
+*/
 func (sk *StakingPlugin) SetReward(block *types.Block, numStr string) error {
 	//set reward history
 	packageReward, err := LoadNewBlockReward(block.Hash(), sk.db.GetDB())
