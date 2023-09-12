@@ -38,6 +38,8 @@ type ImplicitPPOSTx struct {
 }
 
 type EpochView struct {
+	CurPackageReward  *big.Int `json:"curPackageReward"`
+	CurStakingReward  *big.Int `json:"curStakingReward"`
 	NextPackageReward *big.Int `json:"nextPackageReward"`
 	NextStakingReward *big.Int `json:"nextStakingReward"`
 	PackageReward     *big.Int `json:"packageReward"`

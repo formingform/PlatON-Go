@@ -237,7 +237,7 @@ func (api *MonitorAPI) GetValidatorsByBlockNumber(number rpc.BlockNumber) (*stak
 	return &validators, nil
 }
 
-// 输入参数是上个结算周期的最后一个块高
+// 输入的blockNumber是epoch的结束块高，或者是0块高
 func (api *MonitorAPI) GetEpochInfoByBlockNumber(number rpc.BlockNumber) (*EpochView, error) {
 	blockNumber := uint64(number)
 	if number == rpc.LatestBlockNumber {
@@ -270,6 +270,16 @@ func (api *MonitorAPI) GetEpochInfoByBlockNumber(number rpc.BlockNumber) (*Epoch
 		return nil, nil
 	}
 
+	if blockNumber == 0 {
+		view.NextPackageReward = view.PackageReward
+		view.NextStakingReward = view.StakingReward
+		view.CurPackageReward = big.NewInt(0)
+		view.CurStakingReward = big.NewInt(0)
+		return &view, nil
+	}
+
+	view.CurPackageReward = view.PackageReward
+	view.CurStakingReward = view.StakingReward
 	view.NextPackageReward = common.Big0
 	view.NextStakingReward = common.Big0
 

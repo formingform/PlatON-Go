@@ -110,6 +110,12 @@ func (m *Monitor) Monitordb() *monitorDB {
 	TokenTotalSupply *big.Int       `json:"tokenTotalSupply,omitempty"`
 }*/
 
+/*
+*
+收集合约内置的转账交易（不包括初始交易是带value的合约调用）
+1. 合约内部的lat转账
+2. 合约自杀时的lat转账
+*/
 func (m *Monitor) CollectEmbedTransfer(blockNumber uint64, txHash common.Hash, from, to common.Address, amount *big.Int) {
 	log.Info("CollectEmbedTransferTx", "blockNumber", blockNumber, "txHash", txHash.String(), "from", from.Bech32(), "to", to.Bech32(), "amount", amount)
 

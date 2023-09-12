@@ -714,7 +714,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]by
 		bigVal = value.ToBig()
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(callContext.contract, toAddr, args, gas, bigVal)
+	ret, returnGas, err := interpreter.evm.Call(IsEmbedTransaction, callContext.contract, toAddr, args, gas, bigVal)
 
 	if err != nil {
 		temp.Clear()
@@ -937,7 +937,7 @@ func opSuicide(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 
 	//stats: 收集隐含交易
 	if balance.Sign() > 0 {
-		log.Info("collect embed transfer in opSuicide()", "blockNumber", interpreter.evm.Context.BlockNumber.Uint64(), "txHash", interpreter.evm.StateDB.TxHash(), "caller", callContext.contract.Address().Bech32(), "to", common.Address(beneficiary.Bytes20()).Bech32(), "&value", &balance)
+		log.Info("collect embed transfer in opSuicide()", "blockNumber", interpreter.evm.Context.BlockNumber.Uint64(), "txHash", interpreter.evm.StateDB.TxHash(), "caller", callContext.contract.Address().Bech32(), "to", common.Address(beneficiary.Bytes20()).Bech32(), "value", balance.String())
 		monitor.MonitorInstance().CollectEmbedTransfer(interpreter.evm.Context.BlockNumber.Uint64(), interpreter.evm.StateDB.TxHash(), callContext.contract.Address(), common.Address(beneficiary.Bytes20()), balance)
 	}
 
