@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PlatONnetwork/PlatON-Go/common/sort"
+	"github.com/PlatONnetwork/PlatON-Go/monitor"
 	"math"
 	"math/big"
 	"sync"
@@ -817,6 +818,23 @@ func (rmp *RewardMgrPlugin) CalcEpochReward(blockHash common.Hash, head *types.H
 	log.Debug("Call CalcEpochReward, Cycle reward", "currBlockNumber", head.Number, "currBlockHash", blockHash, "currBlockTime", head.Time,
 		"epochTotalReward", epochTotalReward, "newBlockRewardRate", xcom.NewBlockRewardRate(), "epochTotalNewBlockReward", epochTotalNewBlockReward,
 		"epochTotalStakingReward", epochTotalStakingReward, "epochBlocks", epochBlocks, "newBlockReward", newBlockReward)
+
+	var nextEpoch uint64
+	if head.Number.Uint64() == common.Big1.Uint64() {
+		nextEpoch = 1
+	} else {
+		nextEpoch = xutil.CalculateEpoch(head.Number.Uint64()) + 1
+	}
+	monitor.MonitorInstance().CollectionNextEpochInfo(
+		nextEpoch,
+		newBlockReward,
+		epochTotalStakingReward,
+		yearNumber,           // 可以另外按key=chainAge来存储
+		yearStartBlockNumber, // 可以另外按key=chainAge来存储
+		uint32(remainEpoch),  // 可以另外按key=chainAge来存储
+		avgPackTime,
+	)
+
 	return newBlockReward, epochTotalStakingReward, nil
 }
 

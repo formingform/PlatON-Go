@@ -284,6 +284,23 @@ func (m *Monitor) CollectProxyPattern(txHash common.Hash, proxyContractInfo, imp
 	log.Info("CollectProxyPattern success", "txHash", txHash.String(), "json", string(json))
 }
 
+// epoch切换时，收集下一个epoch的相关信息
+func (m *Monitor) CollectionNextEpochInfo(nextEpoch uint64, newBlockReward, epochTotalStakingReward *big.Int, chainAge uint32, yearStartBlockNumber uint64, remainEpochThisYear uint32, avgPackTime uint64) {
+	view := EpochView{
+		PackageReward:     newBlockReward,          //出块奖励
+		StakingReward:     epochTotalStakingReward, //总的质押奖励
+		ChainAge:          chainAge + 1,            // ChainAge starts from 1
+		YearStartBlockNum: yearStartBlockNumber,
+		YearEndBlockNum:   yearStartBlockNumber + uint64(remainEpochThisYear)*xutil.CalcBlocksEachEpoch(),
+		RemainEpoch:       remainEpochThisYear,
+		AvgPackTime:       avgPackTime,
+	}
+	json := common.ToJson(view)
+	dbKey := EpochInfoKey.String() + "_" + strconv.FormatUint(nextEpoch, 10)
+	m.monitordb.Put([]byte(dbKey), json)
+	log.Debug("CollectionNextEpochInfo", "data", string(json))
+}
+
 func (m *Monitor) IsProxied(proxy, impl common.Address) bool {
 	flagDbKey := proxyPatternFlagKey.String() + "_" + proxy.String() + "_" + impl.String()
 	flagBytes, err := m.monitordb.Get([]byte(flagDbKey))
