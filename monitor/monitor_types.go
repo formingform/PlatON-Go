@@ -38,17 +38,17 @@ type ImplicitPPOSTx struct {
 }
 
 type EpochView struct {
-	CurPackageReward  *big.Int `json:"curPackageReward"`
-	CurStakingReward  *big.Int `json:"curStakingReward"`
-	NextPackageReward *big.Int `json:"nextPackageReward"`
-	NextStakingReward *big.Int `json:"nextStakingReward"`
-	PackageReward     *big.Int `json:"packageReward"`
-	StakingReward     *big.Int `json:"stakingReward"`
-	ChainAge          uint32   `json:"chainAge"` //starts from 1
-	YearStartBlockNum uint64   `json:"yearStartBlockNum"`
-	YearEndBlockNum   uint64   `json:"yearEndBlockNum"`
-	RemainEpoch       uint32   `json:"remainEpoch"`
-	AvgPackTime       uint64   `json:"avgPackTime"`
+	CurPackageReward  *big.Int `json:"curPackageReward,omitempty"`
+	CurStakingReward  *big.Int `json:"curStakingReward,omitempty"`
+	NextPackageReward *big.Int `json:"nextPackageReward,omitempty"`
+	NextStakingReward *big.Int `json:"nextStakingReward,omitempty"`
+	PackageReward     *big.Int `json:"packageReward,omitempty"`
+	StakingReward     *big.Int `json:"stakingReward,omitempty"`
+	ChainAge          uint32   `json:"chainAge,omitempty"` //starts from 1
+	YearStartBlockNum uint64   `json:"yearStartBlockNum,omitempty"`
+	YearEndBlockNum   uint64   `json:"yearEndBlockNum,omitempty"`
+	RemainEpoch       uint32   `json:"remainEpoch,omitempty"`
+	AvgPackTime       uint64   `json:"avgPackTime,omitempty"`
 }
 
 type AccountView struct {

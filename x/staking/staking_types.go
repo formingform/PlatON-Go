@@ -919,37 +919,37 @@ func (v ValidatorArray) String() string {
 
 type ValidatorEx struct {
 	//NodeAddress common.Address
-	NodeId discover.NodeID `json:"nodeId"`
+	NodeId discover.NodeID `json:"nodeId,omitempty"`
 	// bls public key
 	BlsPubKey bls.PublicKeyHex `json:"-"`
 	// The account used to initiate the staking
-	StakingAddress common.Address `json:"stakingAddress"`
+	StakingAddress common.Address `json:"stakingAddress,omitempty"`
 	// The account receive the block rewards and the staking rewards
-	BenefitAddress common.Address `json:"benefitAddress"`
+	BenefitAddress common.Address `json:"benefitAddress,omitempty"`
 	// Delegate reward amount percent for current settlement cycle
-	RewardPer uint16 `json:"rewardPer"`
+	RewardPer uint16 `json:"rewardPer,omitempty"`
 	// Delegate reward amount percent for next settlement cycle
-	NextRewardPer uint16 `json:"nextRewardPer"`
+	NextRewardPer uint16 `json:"nextRewardPer,omitempty"`
 	// Number of settlement cycles when changing the commission reward percentage
-	RewardPerChangeEpoch uint32 `json:"rewardPerChangeEpoch"`
+	RewardPerChangeEpoch uint32 `json:"rewardPerChangeEpoch,omitempty"`
 	// The tx index at the time of staking
-	StakingTxIndex uint32 `json:"stakingTxIndex"`
+	StakingTxIndex uint32 `json:"stakingTxIndex,omitempty"`
 	// The version of the node process
-	ProgramVersion uint32 `json:"programVersion"`
+	ProgramVersion uint32 `json:"programVersion,omitempty"`
 	// Block height at the time of staking
-	StakingBlockNum uint64 `json:"stakingBlockNum"`
+	StakingBlockNum uint64 `json:"stakingBlockNum,omitempty"`
 	// All vons of staking and delegated
 	//Shares *big.Int
-	Shares *hexutil.Big `json:"shares"`
+	Shares *hexutil.Big `json:"shares,omitempty"`
 	// Node desc
 	Description
 	// this is the term of validator in consensus round
 	// [0, N]
-	ValidatorTerm uint32 `json:"validatorTerm"`
+	ValidatorTerm uint32 `json:"validatorTerm,omitempty"`
 	// Effective total delegate
-	DelegateTotal *hexutil.Big `json:"delegateTotal"`
+	DelegateTotal *hexutil.Big `json:"delegateTotal,omitempty"`
 
-	DelegateRewardTotal *hexutil.Big `json:"delegateRewardTotal"`
+	DelegateRewardTotal *hexutil.Big `json:"delegateRewardTotal,omitempty"`
 }
 
 func (vex *ValidatorEx) String() string {
