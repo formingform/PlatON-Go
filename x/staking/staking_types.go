@@ -756,15 +756,12 @@ func CompareDefault(removes NeedRemoveCans, left, right *Validator) int {
 //
 // What is the invalid ?  That are DuplicateSign and lowRatio&invalid and lowVersion and withdrew&NotInEpochValidators
 //
-//
-//
 // Invalid Status: From invalid to valid
 // ProgramVersion: From small to big
 // validaotorTerm: From big to small
 // Shares： From small to big
 // BlockNumber: From big to small
 // TxIndex: From big to small
-//
 //
 // Compare Left And Right
 // 1: Left > Right
@@ -922,37 +919,37 @@ func (v ValidatorArray) String() string {
 
 type ValidatorEx struct {
 	//NodeAddress common.Address
-	NodeId discover.NodeID
+	NodeId discover.NodeID `json:"nodeId"`
 	// bls public key
-	BlsPubKey bls.PublicKeyHex
+	BlsPubKey bls.PublicKeyHex `json:"-"`
 	// The account used to initiate the staking
-	StakingAddress common.Address
+	StakingAddress common.Address `json:"stakingAddress"`
 	// The account receive the block rewards and the staking rewards
-	BenefitAddress common.Address
+	BenefitAddress common.Address `json:"benefitAddress"`
 	// Delegate reward amount percent for current settlement cycle
-	RewardPer uint16
+	RewardPer uint16 `json:"rewardPer"`
 	// Delegate reward amount percent for next settlement cycle
-	NextRewardPer uint16
+	NextRewardPer uint16 `json:"nextRewardPer"`
 	// Number of settlement cycles when changing the commission reward percentage
-	RewardPerChangeEpoch uint32
+	RewardPerChangeEpoch uint32 `json:"rewardPerChangeEpoch"`
 	// The tx index at the time of staking
-	StakingTxIndex uint32
+	StakingTxIndex uint32 `json:"stakingTxIndex"`
 	// The version of the node process
-	ProgramVersion uint32
+	ProgramVersion uint32 `json:"programVersion"`
 	// Block height at the time of staking
-	StakingBlockNum uint64
+	StakingBlockNum uint64 `json:"stakingBlockNum"`
 	// All vons of staking and delegated
 	//Shares *big.Int
-	Shares *hexutil.Big
+	Shares *hexutil.Big `json:"shares"`
 	// Node desc
 	Description
 	// this is the term of validator in consensus round
 	// [0, N]
-	ValidatorTerm uint32
+	ValidatorTerm uint32 `json:"validatorTerm"`
 	// Effective total delegate
-	DelegateTotal *hexutil.Big
+	DelegateTotal *hexutil.Big `json:"delegateTotal"`
 
-	DelegateRewardTotal *hexutil.Big
+	DelegateRewardTotal *hexutil.Big `json:"delegateRewardTotal"`
 }
 
 func (vex *ValidatorEx) String() string {
@@ -1034,13 +1031,13 @@ func (queue ValArrIndexQueue) String() string {
 // An item that exists for slash
 type SlashNodeItem struct {
 	// the nodeId will be slashed
-	NodeId discover.NodeID
+	NodeId discover.NodeID `json:"nodeId"`
 	// the amount of von with slashed
-	Amount *big.Int
+	Amount *big.Int `json:"amount,omitempty"`
 	// slash type
-	SlashType CandidateStatus
+	SlashType CandidateStatus `json:"slashType,omitempty"`
 	// the benefit adrr who will receive the slash amount of von
-	BenefitAddr common.Address
+	BenefitAddr common.Address `json:"benefitAddr,omitempty"`
 }
 
 type SlashNodeData struct {
