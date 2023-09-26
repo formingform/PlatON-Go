@@ -1745,7 +1745,15 @@ func (bc *BlockChain) ProcessDirectly(block *types.Block, state *state.StateDB, 
 		bc.reportBlock(block, receipts, err)
 		return nil, err
 	}
-	log.Warn("Execute block time", "blockNumber", block.Number(), "blockHash", block.Hash(), "time", time.Since(start))
+	if block.Number().Uint64()%10000 == 0 {
+		log.Warn("Execute block time", "blockNumber", block.Number(), "blockHash", block.Hash(), "time", time.Since(start))
+	}
+	duration := time.Since(start)
+	if duration.Milliseconds() > 500 {
+		log.Warn("Execute block time", "blockNumber", block.Number(), "blockHash", block.Hash(), "time", time.Since(start))
+	} else {
+		log.Debug("Execute block time", "blockNumber", block.Number(), "blockHash", block.Hash(), "time", time.Since(start))
+	}
 
 	// Validate the state using the default validator
 	start = time.Now()

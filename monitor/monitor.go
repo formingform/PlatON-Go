@@ -341,7 +341,6 @@ func (m *Monitor) GetProxyPatternList(blockNumber uint64, txHash common.Hash) []
 }
 
 // 收集隐式的ppos交易数据
-// 新方式（暂时未启用
 func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, from, to common.Address, input []byte, ret []byte, itsLog *types.Log) {
 	errCode := binary.BigEndian.Uint16(ret)
 	inputHex := hexutil.Encode(input)
@@ -353,6 +352,11 @@ func (m *Monitor) CollectImplicitPPOSTx(blockNumber uint64, txHash common.Hash, 
 		return
 	}
 
+	// 参考：x/xcom/common_types.go:func AddLogWithRes(state StateDB, blockNumber uint64, contractAddr common.Address, event, code string, datas ...interface{})
+	// 可知ppos交易的log data组成和编码规则
+	// Log.data字段编码规则:
+	// 如果datas为空,  rlp([code]),
+	// 如果datas不为空,rlp([code,rlp(data1),rlp(data2)...]),
 	newElement := ImplicitPPOSTx{From: from, To: to, InputHex: inputHex, LogDataHex: hexutil.Encode(itsLog.Data)}
 
 	var implicitPPOSTxs []*ImplicitPPOSTx
