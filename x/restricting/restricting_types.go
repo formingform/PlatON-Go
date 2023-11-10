@@ -26,6 +26,11 @@ import (
 // for genesis and plugin test
 // 每个账户，作为锁仓计划的资金释放目标对象，都可以有且只有一个这样的对象，记录当前的锁仓计划状态
 // 总的锁仓金额 =  AdvanceAmount + CachePlanAmount
+// 上面计算账户的总的锁仓金额不对，正确的应该是：
+// 总的锁仓金额 =  CachePlanAmount
+// 因为：当一个账户把锁仓资金用户质押或者委托，那么AdvanceAmount = AdvanceAmount + amout；而CachePlanAmount保持不变。参考：
+// 委托节点：func (sk *StakingPlugin) Delegate(...)方法 x/plugin/staking_plugin.go:1006
+// 利用锁仓资金委托：func (rp *RestrictingPlugin) AdvanceLockedFunds(...)方法 x/plugin/restricting_plugin.go:337
 type RestrictingInfo struct {
 	NeedRelease     *big.Int // 欠释放金额，到了结算周期需要释放却因为质押而无法释放的金额
 	AdvanceAmount   *big.Int // 用于质押或委托的金额
